@@ -54,7 +54,7 @@ function matchFace(A, q, group) {
 
 function newAtt() {
   return { title: '', names: [], groups: [], ph: [], pv: [], fid: [], faces: [], fs: [], rg: [], regTok: new Map(), lt: null, open: false, openedAt: 0,
-    cfg: { show: true, photoReq: false, locReq: true, selfReg: false, face: true, faceOnly: false, faceLive: true, faceLvl: 'normal', radius: 150, lateMin: 0, center: null },
+    cfg: { show: true, photoReq: false, locReq: true, selfReg: false, face: true, faceOnly: true, faceLive: true, faceLvl: 'normal', radius: 150, lateMin: 0, center: null },
     marks: new Map(), photos: new Map(), hashes: new Map(), byTok: new Map(),
     dirty: new Set(), tkAdd: new Set(), tkDel: new Set(), timer: null, cc: null, ver: 0, medVer: -1, med: null, all: false };
 }
