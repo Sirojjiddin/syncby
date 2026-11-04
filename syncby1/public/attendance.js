@@ -3,7 +3,7 @@
 // 📋 Davomat (o'quv markaz): Transmitter paneli + Receiver belgilash oynasi. app.js bilan window.SC ko'prigi orqali ishlaydi.
 const { S, send, toast, isHost, $, makeZip, xlsxToRows, unzipDocx, sNow } = window.SC;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const D = { title: '', n: [], g: [], T: [], cfg: { open: false, show: true, photoReq: false, locReq: true, face: true, faceOnly: false, faceLive: true, faceLvl: 'normal', faceN: 0, selfReg: false, lateMin: 0, radius: 150, center: null }, taken: new Set(), me: null,
+const D = { title: '', n: [], g: [], T: [], cfg: { open: false, show: true, photoReq: false, locReq: true, face: true, faceOnly: true, faceLive: true, faceLvl: 'normal', faceN: 0, selfReg: false, lateMin: 0, radius: 150, center: null }, taken: new Set(), me: null,
   fm: { fid: [], fc: [], ph: [], pv: [], rg: [] },
   rows: new Map(), st: null, c: null, filter: 'all', q: '', shown: 120 };
 const WHY = { far: 'Juda uzoqda', warn: 'Radiusdan tashqarida', noloc: 'Joylashuv yo\'q', lowacc: 'GPS aniqligi past', dupphoto: 'Bir xil rasm', nophoto: 'Rasm yo\'q', nolive: 'Jonlilik tasdiqlanmadi' };
