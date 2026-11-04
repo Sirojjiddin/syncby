@@ -842,7 +842,7 @@ function loadCurrent() {
   applyItemGain(true);
   setSrc(it);
   if ('mediaSession' in navigator) {
-    try { navigator.mediaSession.metadata = new MediaMetadata({ title: it.name, artist: 'SyncCast' }); } catch {}
+    try { navigator.mediaSession.metadata = new MediaMetadata({ title: it.name, artist: 'SyncBY' }); } catch {}
   }
 }
 
