@@ -1925,7 +1925,7 @@ const CENTER = (() => {
     const bi = $('#brandImg'), ci = $('#cbLogo');
     [bi, ci].forEach(im => { if (logo) { im.src = logo; im.hidden = false; } else { im.hidden = true; im.removeAttribute('src'); } });
     $('#brandMark').hidden = !!logo;
-    $('#brandName').textContent = cur ? cur.name : 'SyncCast';
+    $('#brandName').textContent = cur ? cur.name : 'SyncBY';
     $('#brandSub').hidden = !cur;
     const bd = $('#centerBadge'); bd.hidden = !cur;
     if (cur) { $('#cbLabel').textContent = cur.name; if (cur.link) bd.href = cur.link; else bd.removeAttribute('href'); }
