@@ -1,13 +1,55 @@
 <!doctype html>
-<html lang="uz">
+<html lang="uz" class="pl-lock">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0e1a">
 <title>SyncBy</title>
-<link rel="stylesheet" href="/style.css?v=24">
-<link rel="stylesheet"
-href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="/style.css?v=29" media="print" onload="this.media='all';window.__plc=(window.__plc||0)+1">
+<link rel="stylesheet" href="/theme.css?v=4" media="print" onload="this.media='all';window.__plc=(window.__plc||0)+1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@700;800&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" media="print" onload="this.media='all'" crossorigin="anonymous">
+<script defer src="/app.js?v=31"></script>
+<script defer src="/face.js?v=4"></script>
+<script defer src="/attendance.js?v=12"></script>
+<noscript><link rel="stylesheet" href="/style.css?v=29"><link rel="stylesheet" href="/theme.css?v=4"><style>#preloader{display:none}html.pl-lock,html.pl-lock body{overflow:auto;height:auto}</style></noscript>
+<style id="plCss">
+html.pl-lock,html.pl-lock body{overflow:hidden;height:100%}
+html,body{background:#0b0e1a}
+#preloader{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;overflow:hidden;color:#eef1fb;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  background:radial-gradient(60% 50% at 15% 0%,rgba(91,140,255,.26),transparent 70%),radial-gradient(55% 50% at 100% 10%,rgba(138,91,255,.22),transparent 70%),radial-gradient(60% 50% at 50% 110%,rgba(54,214,255,.14),transparent 70%),#0b0e1a;
+  transition:opacity .45s ease,transform .45s ease}
+#preloader.out{opacity:0;transform:scale(1.03);pointer-events:none}
+.pl-box{display:flex;flex-direction:column;align-items:center;gap:18px;padding:0 20px;animation:plIn .6s cubic-bezier(.22,1,.36,1) both}
+@keyframes plIn{from{opacity:0;transform:translateY(14px)}}
+/* ikki nuqta bir-biriga intilib BIRLASHADI, to'lqin tarqaladi */
+.pl-fuse{position:relative;width:200px;height:84px}
+.pl-fuse i{position:absolute;top:50%;left:50%;display:block;border-radius:50%;will-change:transform}
+.pl-d{width:30px;height:30px;margin:-15px 0 0 -15px}
+.pl-d.a{background:radial-gradient(circle at 35% 30%,#b8f1ff,#36d6ff 55%,#2a8fd0);box-shadow:0 0 22px rgba(54,214,255,.75);animation:plA 2.2s cubic-bezier(.65,0,.35,1) infinite}
+.pl-d.b{background:radial-gradient(circle at 35% 30%,#d8c8ff,#8a5bff 55%,#5b3fd0);box-shadow:0 0 22px rgba(138,91,255,.75);animation:plB 2.2s cubic-bezier(.65,0,.35,1) infinite}
+@keyframes plA{0%{transform:translateX(-78px) scale(.8)}42%,58%{transform:translateX(-7px) scale(1.12)}100%{transform:translateX(-78px) scale(.8)}}
+@keyframes plB{0%{transform:translateX(78px) scale(.8)}42%,58%{transform:translateX(7px) scale(1.12)}100%{transform:translateX(78px) scale(.8)}}
+.pl-r{width:30px;height:30px;margin:-15px 0 0 -15px;border:2px solid rgba(120,180,255,.9);opacity:0;animation:plR 2.2s ease-out infinite}
+.pl-r.s2{animation-delay:.18s}
+@keyframes plR{0%,44%{opacity:0;transform:scale(.6)}48%{opacity:.9}100%{opacity:0;transform:scale(3.4)}}
+.pl-trail{position:absolute;top:50%;left:50%;height:2px;width:156px;margin:-1px 0 0 -78px;border-radius:2px;background:linear-gradient(90deg,#36d6ff,#8a5bff);opacity:.35;transform-origin:50% 50%;animation:plT 2.2s cubic-bezier(.65,0,.35,1) infinite}
+@keyframes plT{0%,100%{transform:scaleX(1);opacity:.35}45%,55%{transform:scaleX(.08);opacity:0}}
+.pl-word{display:flex;font-family:Unbounded,Inter,system-ui,sans-serif;font-weight:800;font-size:clamp(38px,10.5vw,58px);line-height:1.1;letter-spacing:-.015em}
+.pl-word span{display:inline-block;opacity:0;background:linear-gradient(100deg,#fff 0%,#36d6ff 35%,#5b8cff 65%,#8a5bff 100%);-webkit-background-clip:text;background-clip:text;color:transparent;animation:plL .6s cubic-bezier(.22,1,.36,1) forwards;animation-delay:calc(var(--i)*60ms + .15s)}
+@keyframes plL{from{opacity:0;transform:translateY(.45em) scale(.9)}to{opacity:1;transform:none}}
+.pl-tag{margin-top:-6px;font-size:11px;letter-spacing:.34em;text-transform:uppercase;color:#7f8bab;font-weight:700;opacity:0;animation:plFade .6s ease .75s forwards}
+@keyframes plFade{to{opacity:1}}
+.pl-bar{position:relative;width:min(64vw,260px);height:4px;border-radius:4px;background:rgba(255,255,255,.1);overflow:hidden}
+.pl-bar b{position:absolute;inset:0;border-radius:4px;background:linear-gradient(90deg,#36d6ff,#5b8cff,#8a5bff);transform:scaleX(0);transform-origin:0 50%;will-change:transform}
+.pl-pct{margin-top:-6px;color:#94a0bf;font-size:12px;font-weight:700;letter-spacing:.12em;font-variant-numeric:tabular-nums}
+#preloader.done .pl-d{animation:none;transform:scale(1.1)}
+#preloader.done .pl-trail{animation:none;opacity:0}
+@media (prefers-reduced-motion:reduce){.pl-d,.pl-r,.pl-trail{animation:none}.pl-d.a{transform:translateX(-7px)}.pl-d.b{transform:translateX(7px)}.pl-word span,.pl-tag{animation-duration:.01ms}}
+</style>
 <meta name="color-scheme" content="dark">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 
@@ -58,7 +100,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
 
    
     width: 100%;
-    max-width: 60px;
+    max-width: 40px;
     height: auto;
     object-fit: contain;
     display: block;
@@ -73,11 +115,74 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
 </style>
 </head>
 <body>
+<div id="preloader" role="progressbar" aria-label="Birlash yuklanmoqda" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+  <div class="pl-box">
+    <div class="pl-fuse" aria-hidden="true">
+      <span class="pl-trail"></span>
+      <i class="pl-r"></i><i class="pl-r s2"></i>
+      <i class="pl-d a"></i><i class="pl-d b"></i>
+    </div>
+    <div class="pl-word" aria-hidden="true"><span style="--i:0">B</span><span style="--i:1">i</span><span style="--i:2">r</span><span style="--i:3">l</span><span style="--i:4">a</span><span style="--i:5">s</span><span style="--i:6">h</span></div>
+    <div class="pl-tag" aria-hidden="true">Birgalikda · ulashish · sinxronlash</div>
+    <div class="pl-bar" aria-hidden="true"><b id="plBar"></b></div>
+    <div class="pl-pct" id="plPct" aria-hidden="true">0%</div>
+  </div>
+</div>
+<script id="plBoot">
+(function () {
+  'use strict';
+  var root = document.documentElement, pl = document.getElementById('preloader');
+  var bar = document.getElementById('plBar'), pctEl = document.getElementById('plPct');
+  var seen = false; try { seen = sessionStorage.getItem('pl_seen') === '1'; } catch (e) {}
+  var MIN = seen ? 300 : 900, CAP = 4500, t0 = Date.now();
+  var p = 0, lastInt = -1, dcl = document.readyState !== 'loading', fontsOk = false, ended = false, finishing = false;
+  document.addEventListener('DOMContentLoaded', function () { dcl = true; });
+  window.addEventListener('load', function () { dcl = true; fontsOk = true; window.__plc = 9; });
+  try {                                                       // shrift: ko'pi bilan 0.8 s kutamiz, kutib o'tirmaymiz
+    var f = document.fonts && document.fonts.load ? document.fonts.load('800 20px Unbounded', 'Birlash') : null;
+    if (f) f.then(function () { fontsOk = true; }, function () { fontsOk = true; });
+    setTimeout(function () { fontsOk = true; }, 800);
+  } catch (e) { fontsOk = true; }
+  function ready() { return dcl && fontsOk && (window.__plc || 0) >= 2; }   // HTML + 2 ta CSS + shrift
+  function paint() {
+    bar.style.transform = 'scaleX(' + (p / 100).toFixed(3) + ')';
+    var r = Math.round(p); if (r !== lastInt) { lastInt = r; pctEl.textContent = r + '%'; pl.setAttribute('aria-valuenow', r); }
+  }
+  function tick() {
+    if (ended) return;
+    var el = Date.now() - t0, rd = (ready() && el >= MIN) || el > CAP;
+    if (rd) p += (100 - p) * 0.22 + 0.4; else p += (88 - p) * 0.05;
+    if (p > 100) p = 100; paint();
+    if (!finishing && rd && p >= 99.5 && el >= MIN) return finish();
+    requestAnimationFrame(tick);
+  }
+  function finish() {
+    finishing = true; p = 100; paint(); pl.classList.add('done');
+    try { sessionStorage.setItem('pl_seen', '1'); } catch (e) {}
+    setTimeout(function () {
+      pl.classList.add('out'); root.classList.remove('pl-lock');
+      setTimeout(function () { ended = true; if (pl.parentNode) pl.parentNode.removeChild(pl); idlePrefetch(); }, 480);
+    }, 180);
+  }
+  function idlePrefetch() {                                   // yuz tanish modellari: jim, fonda (Data Saver bo'lsa — yo'q)
+    var c = navigator.connection; if (c && (c.saveData || /2g/.test(c.effectiveType || ''))) return;
+    var go = function () {
+      ['tiny_face_detector_model', 'face_landmark_68_tiny_model', 'face_recognition_model'].forEach(function (n) {
+        ['.json', '.bin'].forEach(function (e) { fetch('/models/' + n + e, { priority: 'low' }).catch(function () {}); });
+      });
+    };
+    (window.requestIdleCallback || function (fn) { setTimeout(fn, 2500); })(go);
+  }
+  requestAnimationFrame(tick);
+  setTimeout(function () { if (!finishing) { finishing = true; finish(); } }, CAP + 2500);   // har holda sayt ochiladi
+})();
+</script>
+
 <div class="aurora" aria-hidden="true"></div>
 <div class="home-bg" aria-hidden="true"><i class="orb o1"></i><i class="orb o2"></i><i class="orb o3"></i><span class="grid"></span><span class="beam"></span></div>
 
 <header class="top">
-    <div class="logo"><img id="brandImg" class="brand-img" alt="" hidden><span id="brandMark" class="logo-mark" hidden></span> <span id="brandName">SyncBY</span><small id="brandSub" class="brand-sub" hidden>SyncBY</small></div>
+    <div class="logo"><span id="logoSwap" class="logo-swap" tabindex="-1"><img id="brandImg" class="brand-img" alt="" hidden><span id="brandMark" class="logo-mark" hidden></span><img id="loogoi" src="https://img.samsungapps.com/productNew/000007304457/ENG/IconImage_20260806010757834_NEW_WAP_ICON_512_512.png"></span> <span id="brandName">Birlash</span><small id="brandSub" class="brand-sub" hidden>× Birlash</small></div>
 
   <div class="top-r">
     <span id="liveChip" class="chip live" hidden>🔴 Efirda</span>
@@ -115,6 +220,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
       <div class="home-center">
         <div class="hero">
           <a id="centerBadge" class="center-badge" target="_blank" rel="noopener" hidden><img id="cbLogo" alt="" hidden><span id="cbLabel"></span></a>
+          <p class="eyebrow">Birgalikda · ulashish · sinxronlash</p>
           <h1>Hamma qurilmada <span class="grad">bir vaqtda</span></h1>
           <p class="sub">Bitta qurilmadan ma'lumotlar ya'ni musiqa,testlar,fayllar va shu kabi ma'lumotlar kod orqali ulashiniladi va boshqalari orqali kiriladi.
             Yaratildi: <a href="https://t.me/ceocos">Sirojiddin's team</a> tomonidan
@@ -236,7 +342,7 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
       <div class="room-code">
         <small>Xona kodi</small>
         <div id="hCode" class="code">------</div>
-        <div class="members"><span class="pill">👥 <b id="hTotal">0</b> receiver</span><span class="pill ok">✔ tayyor <b id="hReady">0</b></span></div>
+       
       </div>
       <div class="room-qr"><img id="qr" alt="QR kod" width="120" height="120"></div>
       <div class="room-link">
@@ -246,6 +352,12 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
       </div>
       <p id="lanHint" class="muted" hidden></p>
     </div>
+
+    <details id="rcStrip" class="card rc-strip" open>
+      <summary>👥 Receiverlar: <b id="rcN">0</b><span class="rc-ready muted" id="rcReady"></span></summary>
+      <div id="rcChips" class="rc-chips"></div>
+      <p id="rcEmpty" class="muted">Hozircha hech kim kirmagan. Kod yoki QR ni ulashing.</p>
+    </details>
 
     <div class="tabs" id="hostTabs">
       <button class="tab on" data-tab="media">🎵 Media</button>
@@ -295,12 +407,12 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
       <label id="drop" class="drop">
         <input id="fileIn" type="file" multiple hidden>
         <b>＋ Fayl tanlang</b> <span>yoki bu yerga tashlang</span>
-        <small id="maxHint">musiqa, video, rasm, PDF, Word, Excel, PowerPoint, matn</small>
+        <small id="maxHint">istalgan fayl: musiqa, video, rasm, PDF, Word, Excel, PowerPoint, ZIP va boshqalar</small>
       </label>
       <button id="upAll" class="cancelbtn" type="button" hidden style="margin:8px 0">✕ Yuklashni bekor qilish</button>
         <div id="uploads"></div>
       <div class="url-row">
-        <input id="urlIn" placeholder="YouTube havolasi yoki to'g'ridan-to'g'ri fayl havolasi">
+        <input id="urlIn" placeholder="Google Drive / YouTube / to'g'ridan-to'g'ri fayl havolasi">
         <button id="urlBtn" class="sec">Qo'shish</button>
       </div>
       <ul id="list" class="list"></ul>
@@ -661,6 +773,7 @@ Javob: A</pre>
   <div id="ytWrap"><div id="ytPlayer"></div></div>
   <img id="pic" alt="">
   <iframe id="docFrame" title="Hujjat"></iframe>
+  <div id="docView" class="docview" hidden></div>
   <div id="docCard" class="doccard">
     <div id="docIco" class="doc-ico">📄</div>
     <div id="docName" class="doc-name"></div>
@@ -752,7 +865,7 @@ Javob: A</pre>
         <label class="sw"><span>⬇ Yuklab ola olsin</span><input type="checkbox" class="tg" id="cfgDl" checked></label>
 
         <h4 class="grp">💬 Muloqot</h4>
-        <label class="sw"><span>😀 Reaksiya yubora olsin</span><input type="checkbox" class="tg" id="cfgReact"></label>
+        <label class="sw"><span>😀 Reaksiya yubora olsin</span><input type="checkbox" class="tg" id="cfgReact" checked></label>
         <label class="sw"><span>💬 Chatga yoza olsin</span><input type="checkbox" class="tg" id="cfgChat" checked></label>
         <label class="sw"><span>🎯 Viktorina paytida ham chatga yozsin</span><input type="checkbox" class="tg" id="cfgChatQuiz" checked></label>
 
@@ -850,8 +963,5 @@ Javob: A</pre>
 
 
 
-<script src="/app.js?v=26"></script>
-<script src="/face.js?v=4"></script>
-<script src="/attendance.js?v=11"></script>
 </body>
 </html>

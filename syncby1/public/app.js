@@ -18,16 +18,17 @@ const KINDS = {
   pdf: ['pdf'],
   text: ['txt', 'csv', 'md'],
   doc: ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf', 'odt', 'ods', 'odp'],
+  archive: ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz', 'zipx'],
 };
-const ICON = { youtube: '▶️', audio: '🎵', video: '🎬', image: '🖼️', pdf: '📕', text: '📝', doc: '📄' };
+const ICON = { youtube: '▶️', audio: '🎵', video: '🎬', image: '🖼️', pdf: '📕', text: '📝', doc: '📄', archive: '🗜️' };
 const kindOfName = n => {
   const e = (n.split('.').pop() || '').toLowerCase();
   for (const k in KINDS) if (KINDS[k].includes(e)) return k;
-  return null;
+  return 'doc';                                                  // noma'lum format ham yuboriladi (fayl kartasi + yuklab olish)
 };
 const isMedia = k => k === 'audio' || k === 'video' || k === 'youtube';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const defaultCfg = () => ({ approve: false, allowChat: true, allowChatQuiz: true, allowReact: false, waitAll: true, allowView: true, allowDownload: true, guard: true, muteAll: false, volume: 100, lockVolume: true, normalize: true, duck: true, locked: false, phoneOnly: false, pcApprove: false, loop: 'off', listed: true });
+const defaultCfg = () => ({ approve: false, allowChat: true, allowChatQuiz: true, allowReact: true, waitAll: true, allowView: true, allowDownload: true, guard: true, muteAll: false, volume: 100, lockVolume: true, normalize: true, duck: true, locked: false, phoneOnly: false, pcApprove: false, loop: 'off', listed: true });
 
 // ------------------------------------------------------------ holat
 const S = {
@@ -406,7 +407,7 @@ function leave(msg, closed) {
   wantOpen = false;
   clearTimeout(reconnectT);
   clearTimeout(startTimer); clearInterval(driftTimer);
-  if (ws) { try { ws.close(); } catch {} ws = null; }
+  if (ws) { try { if (S.role === 'receiver' && !closed) ws.send(JSON.stringify({ type: 'bye' })); ws.close(); } catch {} ws = null; }
   stopMic(true); stopScreen(true); closeAllPeers();
   closeRpc(); remote.streams.clear(); attachRemote();
   unloadPlayer(); hideViewers(); viewerId = null;
@@ -483,7 +484,7 @@ function handle(m) {
       offset = m.serverNow - Date.now();
       readySent = false;
       showView(isHost() ? 'host' : 'recv');
-      if (isHost()) { initHostView(); if (S.newListed === false) { S.newListed = undefined; sendCfg({ listed: false }); } publishLive(); try { showTab(sessionStorage.getItem('sc_tab') || (centerMode() ? 'att' : undefined)); } catch {} } else { $('#rCode').textContent = S.code; setRoomName(m.name || ''); }
+      if (isHost()) { rcSig = ''; setTimeout(() => send({ type: 'members-sync' }), 400); initHostView(); if (S.newListed === false) { S.newListed = undefined; sendCfg({ listed: false }); } publishLive(); try { showTab(sessionStorage.getItem('sc_tab') || (centerMode() ? 'att' : undefined)); } catch {} } else { $('#rCode').textContent = S.code; setRoomName(m.name || ''); }
       setNet('ulandi');
       viewerId = null;
       renderAll();
@@ -576,9 +577,88 @@ function unloadPlayer() {
 }
 
 function hideViewers() {
+  officeTok++; const dv = $('#docView'); dv.hidden = true; dv.textContent = '';
   $('#pic').removeAttribute('src');
   $('#docFrame').removeAttribute('src');
   $('#fileBar').hidden = true;
+}
+
+// ------------------------------------------------------------ Word / Excel / PowerPoint ko'rinishi (preview)
+// docx -> docx-preview, xlsx/xls/ods -> SheetJS, pptx -> pptx-preview (hammasi brauzerning o'zida, fayl hech qayerga yuborilmaydi).
+// Eski formatlar (doc/ppt/rtf/odt/odp) va xato bo'lsa — Microsoft Office Online ko'rsatgichi (faqat sayt internetdan ochiq bo'lsa), bo'lmasa fayl kartasi.
+const OFFICE_EXT = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'rtf', 'odt', 'ods', 'odp'];
+const extOf = n => (String(n).split('.').pop() || '').toLowerCase();
+const OFFICE_MAX = 40 * 1048576;
+let officeTok = 0;
+const LIBS = {
+  jszip: 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
+  docx: 'https://cdn.jsdelivr.net/npm/docx-preview@0.3.2/dist/docx-preview.min.js',
+  xlsx: 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+  pptx: 'https://cdn.jsdelivr.net/npm/pptx-preview@1.0.5/dist/pptx-preview.umd.js',
+};
+const libP = {};
+const loadLib = k => libP[k] || (libP[k] = new Promise((ok, no) => {
+  const sc = document.createElement('script'); sc.src = LIBS[k]; sc.async = true;
+  sc.onload = ok; sc.onerror = () => { delete libP[k]; no(new Error('lib ' + k)); };
+  document.head.appendChild(sc);
+}));
+const publicHost = () => /^(?!localhost$|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1)/.test(location.hostname) && location.protocol === 'https:' && location.hostname.includes('.');
+
+async function previewOffice(it) {
+  const tok = ++officeTok, ext = extOf(it.name), dv = $('#docView');
+  const stale = () => tok !== officeTok;
+  const note = (t) => { dv.hidden = false; dv.className = 'docview dv-note'; dv.textContent = t; setKind('office'); };
+  if (it.size > OFFICE_MAX) return;                                           // juda katta — oddiy karta + yuklab olish
+  const viaMs = () => {                                                       // Microsoft Office Online (sayt ochiq https bo'lsa)
+    if (!publicHost()) return false;
+    const abs = new URL(srcOf(it) + '&pv=1', location.href).href;
+    dv.className = 'docview'; dv.textContent = '';
+    const fr = document.createElement('iframe'); fr.title = it.name; fr.allowFullscreen = true;
+    fr.src = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(abs);
+    dv.appendChild(fr); dv.hidden = false; setKind('office'); return true;
+  };
+  const modern = ['docx', 'xlsx', 'xls', 'ods', 'pptx'].includes(ext);
+  if (!modern) { viaMs(); return; }
+  note('⏳ Hujjat tayyorlanmoqda…');
+  try {
+    const r = await fetch(srcOf(it) + (srcOf(it).startsWith('blob:') ? '' : '&pv=1'));
+    if (!r.ok) throw new Error('http ' + r.status);
+    const buf = await r.arrayBuffer(); if (stale()) return;
+    dv.textContent = ''; dv.className = 'docview';
+    if (ext === 'docx') {
+      await loadLib('jszip'); await loadLib('docx'); if (stale()) return;
+      const box = document.createElement('div'); box.className = 'dv-docx'; dv.appendChild(box);
+      await window.docx.renderAsync(buf, box, null, { inWrapper: true, ignoreLastRenderedPageBreak: true, breakPages: true });
+      if (stale()) return;
+      const pg = box.querySelector('section.docx'), wr = box.querySelector('.docx-wrapper');
+      if (pg && wr && pg.offsetWidth) { const k = (dv.clientWidth - 16) / pg.offsetWidth; if (k > 0 && k < 1) wr.style.zoom = k.toFixed(3); }
+    } else if (ext === 'pptx') {
+      await loadLib('pptx'); if (stale()) return;
+      const box = document.createElement('div'); box.className = 'dv-pptx'; dv.appendChild(box);
+      const w = Math.max(260, Math.min(960, dv.clientWidth - 16));
+      const pv = window.pptxPreview.init(box, { width: w, height: Math.round(w * 9 / 16) });
+      await pv.preview(buf);
+    } else {
+      await loadLib('xlsx'); if (stale()) return;
+      const wb = window.XLSX.read(buf, { type: 'array' });
+      const tabs = document.createElement('div'), body = document.createElement('div'); tabs.className = 'dv-tabs'; body.className = 'dv-sheet';
+      const show = i => {
+        [...tabs.children].forEach((b, j) => b.classList.toggle('on', j === i));
+        const ws = wb.Sheets[wb.SheetNames[i]], ref = ws['!ref'];
+        let more = '';
+        if (ref) { const rg = window.XLSX.utils.decode_range(ref); if (rg.e.r > 1500) { rg.e.r = 1500; ws['!ref'] = window.XLSX.utils.encode_range(rg); more = '<p class="dv-more">… faqat dastlabki 1500 qator ko‘rsatildi</p>'; } }
+        body.innerHTML = window.XLSX.utils.sheet_to_html(ws, { editable: false }) + more;
+      };
+      wb.SheetNames.forEach((n, i) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = n; b.onclick = () => show(i); tabs.appendChild(b); });
+      if (wb.SheetNames.length > 1) dv.appendChild(tabs);
+      dv.appendChild(body); show(0);
+    }
+    dv.hidden = false; setKind('office');
+  } catch (e) {
+    if (stale()) return;
+    dv.textContent = ''; dv.hidden = true;
+    if (!viaMs()) setKind('doc');                                              // oddiy fayl kartasi
+  }
 }
 
 function showViewer(it) {
@@ -603,12 +683,15 @@ function showViewer(it) {
     $('#docIco').textContent = ICON[it.kind] || '📄';
     $('#docName').textContent = it.name;
     $('#docMeta').textContent = fmtSize(it.size);
+    if (it.kind === 'doc' && OFFICE_EXT.includes(extOf(it.name))) previewOffice(it);   // Word / Excel / PowerPoint ... — ko'rsatiladi
   }
   $('#openLink').href = src;
-  $('#openLink').hidden = it.kind === 'doc' || !canDl();
+  $('#openLink').hidden = it.kind === 'doc' || it.kind === 'archive' || !canDl();
   const dl = $('#dlLink');
   dl.href = srcOf(it, true); dl.setAttribute('download', it.name);
   dl.hidden = !canDl();
+  const rxOff = isHost() && !S.cfg.allowDownload;           // Transmitter o'zi doim ko'radi; receiverlarga yopiq bo'lsa — belgi
+  dl.classList.toggle('rx-off', rxOff); $('#openLink').classList.toggle('rx-off', rxOff);
   $('#fileBar').hidden = $('#openLink').hidden && dl.hidden;
 }
 
@@ -1423,14 +1506,40 @@ function renderAll() { renderMembers(); renderNow(); if (isHost()) { renderHostL
 
 function renderMembers() {
   const m = S.members;
-  $('#hTotal').textContent = m.total || 0; $('#hReady').textContent = m.ready || 0;
-  $('#rTotal').textContent = m.total || 0;
-  $('#fnBadge').textContent = m.total || 0;
-  setTxt($('#memN'), String(m.total || 0));
+  const _n = (sel, v) => { const e = $(sel); if (e) e.textContent = v; };   // element bo'lmasa ham qolgan hisoblar to'xtab qolmasin
+  _n('#hTotal', m.total || 0); _n('#hReady', m.ready || 0);
+  _n('#rTotal', m.total || 0);
+  _n('#fnBadge', m.total || 0);
+  _n('#memN', String(m.total || 0));
   if (S.quiz) { if (isHost()) { const q = $('#qgPlayers'); if (q) setTxt(q, String(qPlayersN(S.quiz))); if (S.quiz.phase === 'lobby') renderQuizHost(); } else setTxt($('#qpPlayers'), '👥 ' + qPlayersN(S.quiz)); }
-  if (isHost()) renderRecvList();
+  if (isHost()) { renderRecvList(); renderRecvStrip(); }
   renderStatus();
 }
+
+// ---- Transmitter: receiverlar doim ko'rinadigan ixcham panel (markaz rejimida Media/menyu yopiq bo'lsa ham)
+let rcSig = '';
+function renderRecvStrip() {
+  const box = $('#rcChips'); if (!box) return;
+  const list = S.members.list || [];
+  const on = S.members.total != null ? S.members.total : list.filter(r => !r.off).length, all = list.length;
+  $('#rcN').textContent = all > on ? `${on} onlayn / ${all} kirgan` : on;
+  $('#rcReady').textContent = S.members.ready ? ` · tayyor: ${S.members.ready}` : '';
+  $('#rcEmpty').hidden = list.length > 0;
+  const sig = list.map(r => r.id + '|' + r.name + '|' + (r.av || '') + '|' + (r.ready ? 1 : 0) + '|' + (r.off ? 1 : 0)).join(';');
+  if (sig === rcSig) return; rcSig = sig;
+  box.textContent = '';
+  const frag = document.createDocumentFragment();
+  list.forEach(r => {
+    const c = document.createElement('span'); c.className = 'rc-chip' + (r.off ? ' off' : ''); if (r.off) c.title = 'Oflayn (uzilgan) — qayta ulansa o\'zi qaytadi';
+    const d = document.createElement('i'); if (r.ready && !r.off) d.className = 'ok';
+    const n = document.createElement('span'); n.textContent = ((r.av || '') + ' ' + r.name).trim(); n.title = n.textContent;
+    const k = document.createElement('button'); k.type = 'button'; k.textContent = '✕'; k.title = 'Chiqarib yuborish';
+    k.onclick = () => { if (confirm(`"${r.name}" xonadan chiqarilsinmi?`)) send({ type: 'kick', id: r.id }); };
+    c.append(d, n, k); frag.appendChild(c);
+  });
+  box.appendChild(frag);
+}
+setInterval(() => { try { if (isHost() && ws && ws.readyState === 1 && !document.hidden) send({ type: 'members-sync' }); } catch {} }, 12000);   // ro'yxat yo'qolib qolmasligi uchun siyrak qayta so'rov
 
 // ---- Qabul qilish: kutayotgan receiverlar paneli (Transmitter)
 function renderJoinReq(list) {
@@ -1474,7 +1583,7 @@ function renderRecvList() {
       rlRows.set(r.id, row);
     }
     row.r = r;
-    const dc = 'dot' + (r.ready ? ' ok' : ''); if (row.dot.className !== dc) { row.dot.className = dc; row.dot.title = r.ready ? 'tayyor' : 'yuklanmoqda'; }
+    const dc = 'dot' + (r.off ? ' off' : r.ready ? ' ok' : ''); row.li.style.opacity = r.off ? '.5' : ''; if (row.dot.className !== dc) { row.dot.className = dc; row.dot.title = r.off ? 'oflayn' : r.ready ? 'tayyor' : 'yuklanmoqda'; }
     setTxt(row.nm, (r.av || '') + ' ' + r.name);
     setTxt(row.dv, devLabel(r.dev)); row.dv.hidden = !r.dev; { const dc2 = 'dev' + (r.dev && r.dev.k === 'pc' ? ' warn' : ''); if (row.dv.className !== dc2) row.dv.className = dc2; }
     setTxt(row.sts, r.stat ? `${qBars(r.stat.q)} ${Math.round(r.stat.rtt)}ms · Δ${Math.round(r.stat.drift)}ms` : '');
@@ -1605,7 +1714,7 @@ async function initHostView() {
   try {
     const info = await (await fetch('/api/info')).json();
     S.maxMb = info.maxMb;
-    $('#maxHint').textContent = `musiqa, video, rasm, PDF, Word, Excel, PowerPoint, matn · bittasi ${fmtLimit(info.maxMb)} gacha`;
+    $('#maxHint').textContent = `istalgan fayl (ZIP ham) yoki Google Drive havolasi · bittasi ${fmtLimit(info.maxMb)} gacha`;
     if (/^(localhost|127\.|\[::1\])/.test(location.hostname) && info.lan.length) {
       base = `${location.protocol}//${info.lan[0]}:${location.port || 80}`;
       $('#lanHint').hidden = false;
@@ -1723,15 +1832,14 @@ $('#shareCode').onclick = async () => {
 };
 
 // yuklash (navbat bilan)
-const queue = []; let uploading = false, curUp = null;
+const queue = []; const MAX_UP = 3; const active = new Set();      // 3 tagacha fayl bir vaqtda yuklanadi (tezroq sinxronlanadi)
 function upAllBtn() {
   const b = $('#upAll'); if (!b) return;
-  const n = queue.length + (uploading ? 1 : 0);
+  const n = queue.length + active.size;
   b.hidden = n < 1; b.textContent = n > 1 ? `✕ Hammasini bekor qilish (${n})` : '✕ Yuklashni bekor qilish';
 }
 function enqueue(files) {
   for (const f of files) {
-    if (!kindOfName(f.name)) { toast(`"${f.name}" — bu format qo'llab-quvvatlanmaydi`, 4000); continue; }
     if (S.maxMb && f.size > S.maxMb * 1048576) { toast(`"${f.name}" ${fmtLimit(S.maxMb)} dan katta (${fmtSize(f.size)})`, 5000); continue; }
     const row = document.createElement('div'); row.className = 'up';
     const nm = document.createElement('span'); nm.textContent = `${f.name} · ${fmtSize(f.size)}`;
@@ -1753,20 +1861,22 @@ function cancelUp(it) {
 }
 function cancelAllUps() {
   [...queue].forEach(it => { it.dead = true; it.row.remove(); }); queue.length = 0;
-  if (curUp && curUp.xhr) curUp.xhr.abort();
+  [...active].forEach(u => { if (u.xhr) u.xhr.abort(); });
   upAllBtn();
 }
 function pump() {
-  if (uploading || !queue.length) { upAllBtn(); return; }
-  uploading = true;
-  const it = queue.shift(); curUp = it;
+  while (active.size < MAX_UP && queue.length) startUp(queue.shift());
+  upAllBtn();
+}
+function startUp(it) {
+  active.add(it);
   const { file, row, pr, pt, cx } = it;
   const cid = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   blobs.set(cid, URL.createObjectURL(file));
   if (isMedia(kindOfName(file.name))) analyzeLater(cid, file);
   pt.textContent = '0%';
   const t0 = performance.now();
-  const done = () => { uploading = false; curUp = null; it.dead = true; upAllBtn(); pump(); };
+  const done = () => { active.delete(it); it.dead = true; upAllBtn(); pump(); };
   const fail = msg => {
     row.className = 'up bad'; cx.remove();
     pr.replaceWith(Object.assign(document.createElement('span'), { textContent: msg })); pt.remove();
@@ -1869,7 +1979,7 @@ async function autoRoom(c) {
         if (j.exists && j.isHost && (j.name || saved.name || '') === name) { S.roomName = j.name || name; startSession('host', saved.code, saved.key, ''); return; }
       } catch {}
     }
-    const r = await fetch('/api/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    const r = await fetch('/api/rooms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, ctoken: (window.CENTER_TOKEN && window.CENTER_TOKEN()) || '' }) });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error);
     S.roomName = j.name || name;
@@ -1904,7 +2014,7 @@ $('#roomNameIn').addEventListener('input', () => $('#roomNameIn').classList.remo
 // logotipi va rangi qo'llanadi va shu qurilmada eslab qolinadi (kodning o'zi saqlanmaydi). "Chiqish" standart ko'rinishga qaytaradi.
 const CENTER = (() => {
   const box = $('#centerBox'), form = $('#centerForm'), inp = $('#centerCode'), go = $('#centerGo'), msg = $('#centerMsg'), on = $('#centerOn');
-  const KEY = 'sc_center', css = document.documentElement.style, VARS = ['--pri', '--pri2', '--pri-rgb', '--pri2-rgb', '--tx1', '--tx2'];
+  const KEY = 'sc_center', TK = 'sc_center_tok', DK = 'sc_dev', css = document.documentElement.style, VARS = ['--pri', '--pri2', '--pri-rgb', '--pri2-rgb', '--tx1', '--tx2'];
   let cur = null, enabled = false, lockTimer = 0;
   const hexRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
   const shade = (h, f) => '#' + hexRgb(h).map(v => Math.round(v * f).toString(16).padStart(2, '0')).join('');
@@ -1926,6 +2036,9 @@ const CENTER = (() => {
       lat: Number.isFinite(c.lat) && Math.abs(c.lat) <= 90 ? c.lat : null, lng: Number.isFinite(c.lng) && Math.abs(c.lng) <= 180 ? c.lng : null,
       radius: Number.isFinite(c.radius) && c.radius >= 20 && c.radius <= 50000 ? Math.round(c.radius) : null };
   };
+  const dev = () => {                                       // shu qurilmaning tasodifiy identifikatori: urinishlar chegarasi IP emas, qurilma bo'yicha (umumiy Wi-Fi'dagilar bir-biriga halaqit bermaydi)
+    try { let d = localStorage.getItem(DK); if (!/^[a-z0-9]{8,40}$/i.test(d || '')) { d = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => (b % 36).toString(36)).join(''); localStorage.setItem(DK, d); } return d; } catch { return ''; }
+  };
   const say = (t, cls) => { msg.textContent = t || ''; msg.className = 'cb-msg' + (cls ? ' ' + cls : ''); msg.hidden = !t; };
 
   function apply(c) {
@@ -1940,18 +2053,21 @@ const CENTER = (() => {
     const bi = $('#brandImg'), ci = $('#cbLogo');
     [bi, ci].forEach(im => { if (logo) { im.src = logo; im.hidden = false; } else { im.hidden = true; im.removeAttribute('src'); } });
     $('#brandMark').hidden = !!logo;
-    $('#brandName').textContent = cur ? cur.name : 'SyncBY';
+    { const lg = bi.closest('.logo'), sw = $('#logoSwap');                       // markaz logosi bor bo'lsa: u ko'rinadi, ustiga kelinsa Birlash logosi
+      if (lg) lg.classList.toggle('center-logo', !!(cur && logo));
+      if (sw) sw.classList.remove('peek'); }
+    $('#brandName').textContent = cur ? cur.name : 'birlash';
     $('#brandSub').hidden = !cur;
     const bd = $('#centerBadge'); bd.hidden = !cur;
     if (cur) { $('#cbLabel').textContent = cur.name; if (cur.link) bd.href = cur.link; else bd.removeAttribute('href'); }
     const hostEl = $('#host'); if (hostEl) hostEl.classList.toggle('center-mode', !!cur);
-    { const gr = $('#goRecv'); if (gr) gr.style.display = cur ? 'none' : ''; }          // markaz faqat Transmitter bo'ladi (Receiver tugmasi yashiriladi)
     form.hidden = !!cur; on.hidden = !cur; $('#centerOnName').textContent = cur ? cur.name : '';
     box.hidden = !(enabled || cur);
     document.title = S.roomName ? S.roomName + ' · ' + title() : title();
   }
-  const title = () => (cur ? cur.name : 'SyncBy');
-  [$('#brandImg'), $('#cbLogo')].forEach(im => { im.onerror = () => { im.hidden = true; if (im.id === 'brandImg') $('#brandMark').hidden = false; }; });
+  const title = () => (cur ? cur.name : 'birlash');
+  [$('#brandImg'), $('#cbLogo')].forEach(im => { im.onerror = () => { im.hidden = true; if (im.id === 'brandImg') { $('#brandMark').hidden = false; const lg = im.closest('.logo'); if (lg) lg.classList.remove('center-logo'); } }; });
+  { const sw = $('#logoSwap'); if (sw) sw.addEventListener('click', () => { if (!cur) return; sw.classList.add('peek'); clearTimeout(sw._t); sw._t = setTimeout(() => sw.classList.remove('peek'), 2500); }); }   // telefonda: bosilganda 2,5 s Birlash logosi
 
   function setLocked(sec) {                                 // blok: input o'chadi, qolgan vaqt sanaladi
     clearInterval(lockTimer);
@@ -1972,11 +2088,11 @@ const CENTER = (() => {
     if (!code) { say('Kodni kiriting', 'bad'); inp.focus(); return; }
     go.disabled = true; let locked = false;
     try {
-      const r = await fetch('/api/center/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+      const r = await fetch('/api/center/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, dev: dev() }) });
       const j = await r.json().catch(() => ({}));
       if (r.ok && j.ok) {
         const c = clean(j.center);
-        if (c) { try { localStorage.setItem(KEY, JSON.stringify(c)); } catch {} inp.value = ''; say('', ''); apply(c); toast('✔ ' + c.name + ' — sayt moslashtirildi'); autoRoom(c); return; }
+        if (c) { try { localStorage.setItem(KEY, JSON.stringify(c)); localStorage.setItem(TK, typeof j.token === 'string' ? j.token : ''); } catch {} inp.value = ''; say('', ''); apply(c); toast('✔ ' + c.name + ' — sayt moslashtirildi. Transmitter yoki Receiver ni tanlang'); return; }
       }
       if (j.locked) { locked = true; inp.value = ''; setLocked(j.retryAfter || 1800); return; }
       inp.classList.remove('bad'); void inp.offsetWidth; inp.classList.add('bad');
@@ -1986,14 +2102,15 @@ const CENTER = (() => {
     finally { if (!locked) go.disabled = inp.disabled; }
   });
   inp.addEventListener('input', () => { inp.classList.remove('bad'); });
-  $('#centerOut').onclick = () => { try { localStorage.removeItem(KEY); } catch {} apply(null); say('', ''); toast('Standart ko\'rinishga qaytildi'); };
+  $('#centerOut').onclick = () => { try { localStorage.removeItem(KEY); localStorage.removeItem(TK); } catch {} apply(null); say('', ''); toast('Standart ko\'rinishga qaytildi'); };
 
   try { apply(clean(JSON.parse(localStorage.getItem(KEY)))); } catch { apply(null); }
-  fetch('/api/center/status', { cache: 'no-store' }).then(r => r.json()).then(j => {
+  fetch('/api/center/status?dev=' + encodeURIComponent(dev()), { cache: 'no-store' }).then(r => r.json()).then(j => {
     enabled = !!j.enabled; box.hidden = !(enabled || cur);
     if (j.retryAfter > 0 && !cur) setLocked(j.retryAfter);   // sahifa yangilansa ham blok saqlanadi
   }).catch(() => {});
-  window.CENTER_CUR = () => cur;                            // davomat moduli markazning standart joylashuvini shu yerdan oladi
+  window.CENTER_CUR = () => cur; window.CENTER_TOKEN = () => { try { return cur ? (localStorage.getItem(TK) || '') : ''; } catch { return ''; } };   // xona markazga tegishli bo'lishi uchun (server imzosi)
+                             // davomat moduli markazning standart joylashuvini shu yerdan oladi
   return { title, get cur() { return cur; } };
 })();
 
@@ -2022,7 +2139,8 @@ const ROOMS = (() => {
   async function load() {
     if (document.hidden) return;
     try {
-      const r = await fetch('/api/rooms', { cache: 'no-store' });
+      const ct = (window.CENTER_TOKEN && window.CENTER_TOKEN()) || '';
+      const r = await fetch('/api/rooms' + (ct ? '?ct=' + encodeURIComponent(ct) : ''), { cache: 'no-store' });
       if (!r.ok) throw 0;
       list = await r.json(); loaded = true;
     } catch { if (!loaded) { empty.textContent = 'Xonalar ro\'yxatini olib bo\'lmadi. Kod bilan kiring.'; empty.hidden = false; } return; }
@@ -3320,10 +3438,9 @@ const SFX = (() => {
     g.gain.linearRampToValueAtTime(0.0001, t + d);
     src.connect(bp); bp.connect(g); g.connect(bus); src.start(t); src.stop(t + d + 0.1);
   }
-  const P = { startJingle(c, t) {
-      [392, 523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(c, t + i * 0.1, f, 0.24, { type: 'square', v: 0.1, lp: 2600 }));
-      [523.25, 659.25, 783.99].forEach(f => tone(c, t + 0.5, f, 0.9, { type: 'sawtooth', v: 0.07, lp: 2200, hold: 0.6 }));
-      tone(c, t, 130.8, 0.7, { type: 'sine', v: 0.3 }); tone(c, t + 0.5, 261.6, 0.8, { type: 'sine', v: 0.2 });
+  const P = { startJingle(c, t) {                                         // qisqa (≈0.4 s): 3-2-1 tik-tiklari bilan qo'shilib ketmaydi
+      [392, 523.25, 659.25].forEach((f, i) => tone(c, t + i * 0.09, f, 0.17, { type: 'square', v: 0.1, lp: 2600 }));
+      tone(c, t, 130.8, 0.4, { type: 'sine', v: 0.28 });
     },
     tick(c, t) { tone(c, t, 880, 0.09, { type: 'sine', v: 0.22 }); },
     go(c, t) { tone(c, t, 1318.5, 0.38, { v: 0.24 }); tone(c, t, 1760, 0.38, { v: 0.12 }); tone(c, t, 659.25, 0.38, { type: 'sine', v: 0.18 }); },
@@ -3342,13 +3459,19 @@ const SFX = (() => {
       applause(c, t + 0.3, 1.8, 0.1);
     } };
   const out = c => (c.outputLatency || 0);
+  // Sanoq: tik-tik-tik ovozlari WebAudio soatiga (audio oqimida aniq) serverdagi startAt'ga nisbatan rejalanadi; ko'rinadigan 3-2-1 esa
+  // xuddi shu startAt dan CSS animatsiya bilan chiziladi (cdPaint) — asosiy oqim band bo'lsa ham (rasm yuklanishi) ikkalasi bir xil lahzada.
   function countdown(pub) {
     const c = ac(); if (!c) return;
-    const first = pub.idx === 0, toStart = (pub.startAt - sNow()) / 1000;
-    const at = sec => c.currentTime + sec - out(c);                      // sec — hozirdan keyingi vaqt
-    if (first && toStart > 2) { P.startJingle(c, c.currentTime); duck(c, 1.6); }
-    (first ? [2, 1] : [3, 2, 1]).forEach(k => { if (toStart > k + 0.05) P.tick(c, at(toStart - k)); });
-    if (toStart > 0.05) { P.go(c, at(toStart)); duck(c, toStart + 0.5); }
+    const run = () => {
+      if (!S.quiz || S.quiz.id !== pub.id || S.quiz.idx !== pub.idx || S.quiz.phase !== 'question') return;   // savol almashgan/to'xtagan bo'lsa chalinmaydi
+      const toStart = (pub.startAt - sNow()) / 1000; if (toStart < 0.05) return;
+      const at = sec => c.currentTime + Math.max(0.005, sec - out(c));                                          // sec — hozirdan keyingi vaqt; qurilma chiqish kechikishi hisobga olinadi
+      if (pub.idx === 0 && toStart > 3.15) P.startJingle(c, c.currentTime + 0.01);
+      [3, 2, 1].forEach(k => { if (toStart > k + 0.02) P.tick(c, at(toStart - k)); });
+      P.go(c, at(toStart)); duck(c, toStart + 0.5);
+    };
+    if (c.state === 'running') run(); else c.resume().then(run, () => {});                                    // audio soati to'xtab turgan bo'lsa — ishga tushishini kutib, vaqtni qayta hisoblaymiz
   }
   let finalAt = 0;
   const winN = top => Math.min(3, (top || []).length);
@@ -3632,7 +3755,10 @@ function paintCheat(pub) {
 }
 function renderQuizHost() {
   const qz = S.quiz;
-  $('#qzEditor').hidden = !!qz; $('#qzGame').hidden = !qz; showTab();
+  $('#qzEditor').hidden = !!qz; $('#qzGame').hidden = !qz;
+  const gameEl = $('#qzGame');
+  if (gameEl.parentElement !== document.body) document.body.appendChild(gameEl);
+  showTab();
   document.body.classList.toggle('noscroll', !!qz && isHost());
   if (!qz) { qgMenuSet(false); try { if (document.fullscreenElement) document.exitFullscreen(); } catch {} qSchedule(); return; }
   $('#qgTitle').textContent = qz.title;
@@ -3693,11 +3819,11 @@ function renderQuizHost() {
     d.append(l, r); body.appendChild(d);
   } else if (qz.phase === 'question') {
     const mid = qel('div', 'qg-midrow');
-    const clock = qel('div', 'qz-clock'); const tt = qel('b'); tt.id = 'qgTime'; clock.appendChild(tt);
+    const clock = qel('div', 'qz-ring'); clock.dataset.lv = 'ok';
+    clock.innerHTML = '<svg viewBox="0 0 120 120" aria-hidden="true"><circle class="tk" cx="60" cy="60" r="57" pathLength="60"/><circle class="trk" cx="60" cy="60" r="49"/><circle class="arc" id="qgRing" cx="60" cy="60" r="49" pathLength="100"/></svg><div class="num"><b id="qgTime"></b><small>soniya</small></div>';
     const box = qel('div', 'qg-imgbox'); const im = qImg(qz.q); if (im) box.appendChild(im);
     const ans = qel('div', 'qg-ans'); const an = qel('b', '', String((S.qProg && S.qProg.answered) || 0)); an.id = 'qgAnsN'; ans.append(an, qel('small', '', 'javob'));
     mid.append(clock, box, ans);
-    const tm = qel('div', 'qz-timer'); const bar = qel('i'); bar.id = 'qgBar'; tm.appendChild(bar); body.appendChild(tm);
     qBlock(body, qz, Object.assign({ gridId: 'qgGrid', countId: 'qgCount', mid, fill: true }, qz.hostPlay ? { onPick: qAnswer, picked: S.qAns, locked: S.qAns != null || sNow() < qz.startAt } : {}));   // Transmitter ham o'ynasa — plitalar bosiladigan bo'ladi
   } else if (qz.phase === 'reveal') {
     qBlock(body, qz, { reveal: true, fill: true });
@@ -3837,30 +3963,49 @@ function renderQuizPlay() {
   }
   qSchedule(); qUpdate();
 }
-// Taymer faqat "savol" bosqichida ishlaydi (boshqa paytda protsessor bekor yuklanmaydi); DOM faqat qiymat o'zgarganda yangilanadi
-let qTick = 0;
+// Taymer faqat "savol" bosqichida ishlaydi (boshqa paytda protsessor bekor yuklanmaydi). Ko'rinish har kadrda serverdagi vaqtdan hisoblanadi
+// (requestAnimationFrame + zaxira taymer): asosiy oqim bir lahza band bo'lib qolsa ham sanoq "qotib" qolmaydi — keyingi kadrda to'g'ri qiymatga o'tadi.
+let qTick = 0, qRaf = 0;
+function qLoop() { qRaf = 0; if (!S.quiz || S.quiz.phase !== 'question') return; qUpdate(); qRaf = requestAnimationFrame(qLoop); }
 function qSchedule() {
   const on = !!S.quiz && S.quiz.phase === 'question';
-  if (on && !qTick) qTick = setInterval(qUpdate, 100);
-  else if (!on && qTick) { clearInterval(qTick); qTick = 0; }
+  if (on) { if (!qTick) qTick = setInterval(qUpdate, 250); if (!qRaf) qRaf = requestAnimationFrame(qLoop); }
+  else { if (qTick) { clearInterval(qTick); qTick = 0; } if (qRaf) { cancelAnimationFrame(qRaf); qRaf = 0; } }
 }
 const setTxt = (el, v) => { if (el && el.textContent !== v) el.textContent = v; };
+// 3-2-1: har bir raqam o'z CSS animatsiyasi bilan, boshlanish vaqti startAt'dan hisoblanadi (manfiy kechikish = o'tib ketgan qismi). Audio ham xuddi shu startAt'ga bog'langan.
+function cdPaint(cnt, qz, toStart) {
+  if (toStart <= 0) { if (!cnt.hidden) cnt.hidden = true; return; }
+  const key = qz.id + ':' + qz.idx + ':' + qz.startAt;
+  if (cnt.dataset.k === key && !cnt.hidden) return;                       // allaqachon chizilgan — animatsiya o'zi davom etadi
+  cnt.dataset.k = key; cnt.textContent = '';
+  const mk = (txt, cls, delay, dur) => { const e = qel('span', 'cd ' + cls, txt); e.style.animationDelay = delay.toFixed(3) + 's'; e.style.animationDuration = dur.toFixed(3) + 's'; cnt.appendChild(e); };
+  if (toStart > 3) mk('Tayyor!', 'rd', 0, toStart - 3);                   // rasm yuklanishi uchun zaxira vaqt (server startAt = +3.5 s)
+  [3, 2, 1].forEach(n => { if (toStart > n - 1) mk(String(n), 'n', toStart - n, 1); });
+  cnt.hidden = false;
+}
 function qUpdate() {
   const qz = S.quiz;
   if (!qz || qz.phase !== 'question') return;
   const now = sNow(), toStart = (qz.startAt - now) / 1000, left = (qz.endAt - now) / 1000;
   ['qp', 'qg'].forEach(p => {
     const cnt = document.getElementById(p + 'Count'), bar = document.getElementById(p + 'Bar'), tm = document.getElementById(p + 'Time'), grid = document.getElementById(p + 'Grid');
-    const bodyEl = document.getElementById(p + 'Body');
-    if (cnt) { const h = toStart <= 0; if (cnt.hidden !== h) cnt.hidden = h; setTxt(cnt, String(Math.max(1, Math.ceil(toStart)))); }
-    if (bodyEl) bodyEl.classList.toggle('pre', toStart > 0);
+    const bodyEl = document.getElementById(p + 'Body'), ring = document.getElementById(p + 'Ring');
+    if (cnt) cdPaint(cnt, qz, toStart);
+    if (bodyEl) { const pre = toStart > 0; if (bodyEl.classList.contains('pre') !== pre) bodyEl.classList.toggle('pre', pre); }
     if (bar) { const w = (toStart > 0 ? 100 : clamp(left / qz.q.time * 100, 0, 100)).toFixed(1) + '%'; if (bar.style.width !== w) bar.style.width = w; }
-    if (tm) {
-      const sec = Math.max(0, Math.ceil(left));
+    const sec = Math.max(0, Math.ceil(left));
+    if (ring) {                                                           // Transmitter: doira taymer (silliq kamayadi, rangi o'zgaradi, oxirgi 5 soniyada urib turadi)
+      const pc = toStart > 0 ? 100 : clamp(left / qz.q.time * 100, 0, 100), box = ring.closest('.qz-ring');
+      const off = (100 - pc).toFixed(2); if (ring.dataset.o !== off) { ring.dataset.o = off; ring.style.strokeDashoffset = off; }
+      const lv = pc > 50 ? 'ok' : pc > 20 ? 'warn' : 'bad'; if (box && box.dataset.lv !== lv) box.dataset.lv = lv;
+      if (box) { const low = toStart <= 0 && sec <= 5; if (box.classList.contains('low') !== low) box.classList.toggle('low', low); }
+      setTxt(tm, String(toStart > 0 ? Math.round(qz.q.time) : sec));
+    } else if (tm) {
       setTxt(tm, toStart > 0 ? '' : String(sec));
       tm.classList.toggle('low', toStart <= 0 && sec <= 5);
     }
-    if (grid && (p === 'qp' || qz.hostPlay)) grid.classList.toggle('locked', toStart > 0 || S.qAns != null);
+    if (grid && (p === 'qp' || qz.hostPlay)) { const lk = toStart > 0 || S.qAns != null; if (grid.classList.contains('locked') !== lk) grid.classList.toggle('locked', lk); }
   });
 }
 

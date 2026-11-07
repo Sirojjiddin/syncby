@@ -42,10 +42,13 @@ const KINDS = {
   pdf: ['.pdf'],
   text: ['.txt', '.csv', '.md'],
   doc: ['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.rtf', '.odt', '.ods', '.odp'],
+  archive: ['.zip', '.rar', '.7z', '.tar', '.gz', '.tgz', '.bz2', '.xz', '.zipx'],
 };
 const EXT_KIND = new Map();
 for (const [kind, list] of Object.entries(KINDS)) list.forEach(e => EXT_KIND.set(e, kind));
 const kindOf = ext => EXT_KIND.get(ext) || null;
+const kindOfFile = ext => kindOf(ext) || 'doc';          // noma'lum format ham qabul qilinadi: fayl kartasi + yuklab olish
+const isDlOnly = kind => kind === 'doc' || kind === 'archive';   // brauzerda ochilmaydi, faqat yuklab olinadi (xavfsizlik: hech qachon inline berilmaydi)
 const isMedia = kind => kind === 'audio' || kind === 'video' || kind === 'youtube';
 const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -88,37 +91,52 @@ for (const key of Object.keys(process.env)) {
 }
 CENTERS.sort((a, b) => a.pub.id - b.pub.id);
 
-const codeTries = new Map();                                   // ip -> { n: xatolar soni, until: blok tugash vaqti, t: oxirgi urinish }
+const codeTries = new Map();                                   // kalit -> { n: xatolar soni, until: blok tugash vaqti, t: oxirgi urinish }
 const ipOf = req => String(req.ip || req.socket.remoteAddress || '?').replace(/^::ffff:/, '');
-function codeState(ip) {                                       // muddati o'tgan blok / eski xatolar tozalanadi
-  const e = codeTries.get(ip), now = Date.now();
-  if (e && (e.until ? e.until <= now : now - e.t > CODE_LOCK_MS)) { codeTries.delete(ip); return null; }
+// Blok QURILMA bo'yicha (IP + qurilma identifikatori): bir Wi-Fi'dagi (maktab/markaz) boshqa o'quvchi yoki ustoz bloklanmaydi.
+// Qurilma identifikatorini almashtirib topishga urinishga qarshi — IP bo'yicha ancha yumshoq umumiy chegara (har qurilma chegarasidan 10 barobar, kamida 30).
+const devOf = req => { const d = req.body && typeof req.body.dev === 'string' ? req.body.dev : String(req.query.dev || ''); return /^[a-z0-9]{8,40}$/i.test(d) ? d : ''; };
+const devKey = req => ipOf(req) + '|' + devOf(req);
+const IP_MAX_TRIES = Math.max(30, CODE_MAX_TRIES * 10);
+function codeState(key) {                                      // muddati o'tgan blok / eski xatolar tozalanadi
+  const e = codeTries.get(key), now = Date.now();
+  if (e && (e.until ? e.until <= now : now - e.t > CODE_LOCK_MS)) { codeTries.delete(key); return null; }
   return e || null;
 }
 const lockLeft = e => (e && e.until > Date.now() ? Math.ceil((e.until - Date.now()) / 1000) : 0);
 const lockMsg = s => `Juda ko'p noto'g'ri urinish. ${s >= 60 ? Math.ceil(s / 60) + ' daqiqadan' : s + ' soniyadan'} keyin qayta urinib ko'ring`;
 function pruneCodeTries() {
   const now = Date.now();
-  for (const [ip, e] of codeTries) if (e.until ? e.until <= now : now - e.t > CODE_LOCK_MS) codeTries.delete(ip);
-  for (const ip of codeTries.keys()) { if (codeTries.size <= 4000) break; codeTries.delete(ip); }   // eng eskilari (Map tartibi)
+  for (const [k, e] of codeTries) if (e.until ? e.until <= now : now - e.t > CODE_LOCK_MS) codeTries.delete(k);
+  for (const k of codeTries.keys()) { if (codeTries.size <= 4000) break; codeTries.delete(k); }   // eng eskilari (Map tartibi)
 }
 setInterval(pruneCodeTries, 10 * 60 * 1000).unref();
+// Markaz tokeni: to'g'ri kod kiritilganda server imzolab beradi. Xona shu token bilan yaratilsa, xona markazga tegishli bo'ladi (soxta markaz belgilab bo'lmaydi).
+const CENTER_KEY = crypto.createHash('sha256').update(Buffer.concat([Buffer.from('ctok'), ...CENTERS.map(c => c.hash)])).digest();
+const centerToken = id => crypto.createHmac('sha256', CENTER_KEY).update(String(id)).digest('hex').slice(0, 32);
+function centerFromToken(t) {
+  if (typeof t !== 'string' || t.length !== 32) return 0;
+  const tb = Buffer.from(t);
+  for (const c of CENTERS) { const ok = Buffer.from(centerToken(c.pub.id)); if (ok.length === tb.length && crypto.timingSafeEqual(ok, tb)) return c.pub.id; }
+  return 0;
+}
 
 app.get('/api/center/status', (req, res) => {
-  const e = codeState(ipOf(req));
+  const e = codeState(devKey(req));
   res.set('Cache-Control', 'no-store').json({ enabled: CENTERS.length > 0, max: CODE_MAX_TRIES, left: CODE_MAX_TRIES - (e ? e.n : 0), retryAfter: lockLeft(e) });
 });
 app.post('/api/center/verify', express.json({ limit: '1kb' }), (req, res) => {
   res.set('Cache-Control', 'no-store');
   if (!CENTERS.length) return res.status(404).json({ ok: false, error: 'O\'quv markazlar hali sozlanmagan' });
-  const ip = ipOf(req); let e = codeState(ip);
-  const wait = lockLeft(e);
+  const ip = devKey(req), ipAll = ipOf(req) + '|*'; let e = codeState(ip);
+  const wait = Math.max(lockLeft(e), lockLeft(codeState(ipAll)));
   if (wait) return res.status(429).json({ ok: false, locked: true, retryAfter: wait, error: lockMsg(wait) });   // bloklangan: kod to'g'ri bo'lsa ham tekshirilmaydi
   const code = normCode(req.body && typeof req.body.code === 'string' ? req.body.code : '');
   if (!code) return res.status(400).json({ ok: false, error: 'Kodni kiriting' });                                 // bo'sh yuborish urinish hisoblanmaydi
   const h = sha256(code); let hit = null;
   for (const c of CENTERS) if (crypto.timingSafeEqual(h, c.hash) && !hit) hit = c;                               // hammasi tekshiriladi — javob vaqti kodni oshkor qilmaydi
-  if (hit) { codeTries.delete(ip); return res.json({ ok: true, center: hit.pub }); }
+  if (hit) { codeTries.delete(ip); return res.json({ ok: true, center: hit.pub, token: centerToken(hit.pub.id) }); }
+  { let a = codeState(ipAll); if (!a) { if (codeTries.size >= 5000) pruneCodeTries(); codeTries.set(ipAll, a = { n: 0, until: 0, t: 0 }); } a.n++; a.t = Date.now(); if (a.n >= IP_MAX_TRIES) a.until = a.t + CODE_LOCK_MS; }   // IP bo'yicha umumiy (yumshoq) chegara
   if (!e) { if (codeTries.size >= 5000) pruneCodeTries(); codeTries.set(ip, e = { n: 0, until: 0, t: 0 }); }
   e.n++; e.t = Date.now();
   if (e.n >= CODE_MAX_TRIES) {
@@ -194,7 +212,8 @@ app.get('/files/:code/:file', (req, res) => {
   if (!item) return res.status(404).end();
   if (role !== 'host') {
     if (!isMedia(item.kind) && !room.cfg.allowView) return res.status(403).send('Transmitter fayllarni ko\'rishni o\'chirgan');
-    if (req.query.dl === '1' && !room.cfg.allowDownload) return res.status(403).send('Transmitter yuklab olishni o\'chirgan');
+    const pv = req.query.pv === '1' && item.kind === 'doc';          // Word/Excel/PowerPoint: brauzerda ko'rsatish (preview) uchun faqat "ko'rish" ruxsati yetadi
+    if ((req.query.dl === '1' || (isDlOnly(item.kind) && !pv)) && !room.cfg.allowDownload) return res.status(403).send('Transmitter yuklab olishni o\'chirgan');
   }
   if (role !== 'host') {                                   // ko'p odam bir vaqtda yuklasa, server bo'g'ilmasligi uchun navbat
     if (activeFiles >= MAX_FILE_STREAMS) { res.setHeader('Retry-After', '1'); return res.status(503).end(); }
@@ -205,7 +224,8 @@ app.get('/files/:code/:file', (req, res) => {
   }
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Cache-Control', 'private, max-age=60');
-  if (req.query.dl === '1') res.attachment(item.name);
+  if (isDlOnly(item.kind)) res.setHeader('Content-Security-Policy', 'sandbox');
+  if (req.query.dl === '1' || isDlOnly(item.kind)) res.attachment(item.name);
   res.sendFile(path.join(UPLOAD_DIR, room.code, file), { acceptRanges: true, dotfiles: 'deny' }, err => {
     if (err && !res.headersSent) res.status(err.status || 404).end();
   });
@@ -246,7 +266,7 @@ function defaultCfg() {
     pcApprove: false,       // true: noutbuk/kompyuterdan kirmoqchi bo'lganlar avtomatik "qabul qilish rejimi"ga tushadi (Transmitter ruxsatini kutadi)
     phoneOnly: false,       // true: faqat telefondan kirish mumkin (kompyuter/planshet/TV rad etiladi)
     loop: 'off',            // 'off' | 'one' | 'all'
-    allowReact: false,      // receiverlar emoji reaksiya yubora oladimi
+    allowReact: true,       // receiverlar emoji reaksiya yubora oladimi (dastlab yoqiq)
     waitAll: true,          // Play bosilganda hamma qurilma tayyor bo'lguncha (maks. 6 s) kutish
     allowChat: true,        // receiverlar chatga yoza oladimi (hamma ko'radi)
     allowChatQuiz: true,    // viktorina paytida ham receiverlar chatga yoza oladimi
@@ -305,11 +325,12 @@ function issueToken(room, role, want) {
   return t;
 }
 
-function newRoom(name) {
+function newRoom(name, centerId) {
   const code = genCode();
   if (!code) return null;
   const room = {
     code,
+    centerId: centerId || 0,                            // 0 — oddiy (standart) tizim; >0 — shu o'quv markazning xonasi
     name: cleanRoomName(name),
     hostKey: crypto.randomBytes(12).toString('hex'),
     items: [],
@@ -997,15 +1018,34 @@ function sendMembers(room) {
   if (room.memT) return;
   room.memT = setTimeout(() => { room.memT = null; if (rooms.has(room.code)) flushMembers(room); }, room.clients.size > 20 ? 600 : 120);
 }
+// Kirgan receiverlar ro'yxati (roster): telefon ekrani o'chsa yoki tarmoq uzilsa ham receiver ro'yxatdan YO'QOLMAYDI — «oflayn» bo'lib turadi,
+// qayta ulansa (shu qurilma tokeni bilan) yana onlayn bo'ladi. Transmitter ✕ bilan chiqarsa yoki xona yopilsa o'chadi.
+const ROSTER_KEEP_MS = 3 * 60 * 60 * 1000;
 function flushMembers(room) {
-  const clients = [...room.clients];
+  const clients = [...room.clients].filter(c => c.ctx);
   let ready = 0;
-  for (const c of clients) if (c.ctx && c.ctx.ready) ready++;
-  const base = { type: 'members', total: clients.length, ready, hostOnline: !!room.host };
+  const roster = room.roster || (room.roster = new Map()), now = Date.now();
+  const online = new Set();
+  for (const c of clients) {
+    if (c.ctx.ready) ready++;
+    online.add(c.ctx.tok);
+    const e = roster.get(c.ctx.tok);
+    if (e) { e.id = c.ctx.id; e.name = c.ctx.name; e.av = c.ctx.av; e.dev = c.ctx.dev || null; e.off = 0; }
+    else roster.set(c.ctx.tok, { id: c.ctx.id, name: c.ctx.name, av: c.ctx.av, dev: c.ctx.dev || null, off: 0, since: now });
+  }
+  const offline = [];
+  for (const [tok, e] of roster) {
+    if (online.has(tok)) continue;
+    if (!e.off) e.off = now;
+    if (now - e.off > ROSTER_KEEP_MS) { roster.delete(tok); continue; }
+    offline.push(e);
+  }
+  const base = { type: 'members', total: clients.length, ready, joined: clients.length + offline.length, hostOnline: !!room.host };
   sendAll(clients, base);
   send(room.host, {
     ...base,
-    list: clients.slice(0, 300).map(c => ({ id: c.ctx.id, name: c.ctx.name, av: c.ctx.av, ready: !!c.ctx.ready, muted: !!c.ctx.muted, stat: c.ctx.stat || null, via: c.ctx.parent || null, dev: c.ctx.dev || null })),
+    list: clients.slice(0, MAX_CLIENTS).map(c => ({ id: c.ctx.id, name: c.ctx.name, av: c.ctx.av, ready: !!c.ctx.ready, muted: !!c.ctx.muted, stat: c.ctx.stat || null, via: c.ctx.parent || null, dev: c.ctx.dev || null }))
+      .concat(offline.slice(0, 200).map(e => ({ id: e.id, name: e.name, av: e.av, ready: false, muted: false, stat: null, via: null, dev: e.dev, off: true }))),
   });
 }
 
@@ -1083,27 +1123,34 @@ app.post('/api/rooms', express.json({ limit: '2kb' }), (req, res) => {
   if (rooms.size >= MAX_ROOMS) return res.status(503).json({ error: 'Server band, keyinroq urinib ko\'ring' });
   const name = cleanRoomName(req.body && req.body.name);
   if (!name) return res.status(400).json({ error: 'Xonaga nom bering' });
-  const room = newRoom(name);
+  const room = newRoom(name, centerFromToken(req.body && req.body.ctoken));
   if (!room) return res.status(503).json({ error: 'Kod yaratib bo\'lmadi' });
   res.json({ code: room.code, hostKey: room.hostKey, name: room.name });
 });
 
 // Receiverlar uchun xonalar ro'yxati (nomi bilan): faqat Transmitter onlayn va "ro'yxatda ko'rinsin" yoqilgan xonalar.
 // Natija 1 soniya keshlanadi — yuzlab receiver ro'yxatni yangilab tursa ham server yengil qoladi.
-let roomListCache = { t: 0, json: '[]' };
+const roomListCache = new Map();                              // markaz id (0 — standart) -> { t, json }
 app.get('/api/rooms', (req, res) => {
   const now = Date.now();
-  if (now - roomListCache.t > 1000) {
+  // Markaz xonalari faqat shu markaz kodini kiritgan qurilmaga ko'rinadi (imzolangan token ?ct= orqali). Standart saytdan kirganlar ularni ko'rmaydi,
+  // lekin 6 xonali kodni yozib bemalol kira oladi.
+  const cid = centerFromToken(typeof req.query.ct === 'string' ? req.query.ct.slice(0, 64) : '') || 0;
+  let c = roomListCache.get(cid);
+  if (!c || now - c.t > 1000) {
     const list = [];
     for (const r of rooms.values()) {
       if (!r.cfg.listed || !r.host) continue;
+      if (r.centerId && r.centerId !== cid) continue;
       list.push({ code: r.code, name: r.name || 'Nomsiz xona', n: r.clients.size, locked: !!r.cfg.locked, phoneOnly: !!r.cfg.phoneOnly, approve: !!r.cfg.approve, live: !!(r.live && (r.live.mic || r.live.screen)), quiz: !!r.quiz, at: r.createdAt });
     }
     list.sort((a, b) => b.n - a.n || b.at - a.at);
-    roomListCache = { t: now, json: JSON.stringify(list.slice(0, 200)) };
+    c = { t: now, json: JSON.stringify(list.slice(0, 200)) };
+    if (roomListCache.size > 50) roomListCache.clear();
+    roomListCache.set(cid, c);
   }
   res.setHeader('Cache-Control', 'no-store');
-  res.type('application/json').send(roomListCache.json);
+  res.type('application/json').send(c.json);
 });
 
 app.get('/api/rooms/:code', (req, res) => {
@@ -1210,6 +1257,88 @@ app.post('/api/rooms/:code/drive-list', express.json({ limit: '10kb' }), async (
     res.json({ files: list });
   } catch (e) { res.status(502).json({ error: (e && e.message) || 'Papkani o\'qib bo\'lmadi (papka ochiq ekanini tekshiring)' }); }
 });
+// ---- Google Drive havolasi bilan fayl ulashish: receiverlar faylni to'g'ridan-to'g'ri Google'dan oladi (server yuklanmaydi, tez sinxronlanadi)
+const driveDirectUrl = id => `https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t`;
+function driveParse(u) {
+  if (!['docs.google.com', 'drive.google.com'].includes(u.hostname)) return null;
+  const p = u.pathname; let m;
+  if ((m = p.match(/^\/spreadsheets\/d\/([\w-]{10,})/))) return { type: 'export', url: `https://docs.google.com/spreadsheets/d/${m[1]}/export?format=xlsx`, name: 'Google Jadval.xlsx', kind: 'doc' };
+  if ((m = p.match(/^\/document\/d\/([\w-]{10,})/))) return { type: 'export', url: `https://docs.google.com/document/d/${m[1]}/export?format=docx`, name: 'Google Hujjat.docx', kind: 'doc' };
+  if ((m = p.match(/^\/presentation\/d\/([\w-]{10,})/))) return { type: 'export', url: `https://docs.google.com/presentation/d/${m[1]}/export/pptx`, name: 'Google Taqdimot.pptx', kind: 'doc' };
+  if ((m = p.match(/\/folders\/([\w-]{10,})/))) return { type: 'folder', id: m[1] };
+  if ((m = p.match(/^\/file\/d\/([\w-]{10,})/))) return { type: 'file', id: m[1] };
+  const q = u.searchParams.get('id');
+  if (q && /^[\w-]{10,}$/.test(q) && /^\/(open|uc)$/.test(p)) return { type: 'file', id: q };
+  return null;
+}
+// Faylning nomi/hajmi/turi: faqat sarlavhalar o'qiladi (Range 0-0), tana yuklanmaydi
+async function driveMeta(id) {
+  let cur = driveDirectUrl(id);
+  for (let hop = 0; hop < 5; hop++) {
+    const u = new URL(cur);
+    if (u.protocol !== 'https:' || !G_HOSTS.has(u.hostname)) throw new Error('Faqat Google Drive havolalari qabul qilinadi');
+    const r = await fetch(cur, { redirect: 'manual', signal: AbortSignal.timeout(15000), headers: { range: 'bytes=0-0', 'user-agent': 'Mozilla/5.0 (compatible; SyncCast)' } });
+    if ([301, 302, 303, 307, 308].includes(r.status)) { cur = new URL(r.headers.get('location') || '', cur).href; continue; }
+    if (r.status === 404) throw new Error('Fayl topilmadi (havolani tekshiring)');
+    if (r.status === 401 || r.status === 403) throw new Error('Fayl yopiq: Drive\'da "Havolaga ega hamma ko\'ra oladi" qilib ulashing');
+    if (!r.ok && r.status !== 206) throw new Error('Drive javobi: ' + r.status);
+    const ct = String(r.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    const cd = String(r.headers.get('content-disposition') || '');
+    const cr = String(r.headers.get('content-range') || '');
+    try { await r.body.cancel(); } catch {}
+    if (ct === 'text/html' && !cd) throw new Error('Fayl yopiq: Drive\'da "Havolaga ega hamma ko\'ra oladi" qilib ulashing');
+    const nm = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(cd);
+    let name = 'Drive fayl'; try { name = decodeURIComponent((nm && (nm[1] || nm[2])) || name); } catch {}
+    const size = Number((/\/(\d+)$/.exec(cr) || [])[1]) || Number(r.headers.get('content-length')) || 0;
+    return { name, size, ct };
+  }
+  throw new Error('Havola juda ko\'p yo\'naltirildi');
+}
+// Drive'dan keladigan fayl turi. PDF/matn Drive'dan "attachment" bo'lib keladi, shuning uchun iframe'da emas, fayl kartasi + yuklab olish sifatida
+function driveKindOf(name, ct) {
+  let k = kindOf(path.extname(name).toLowerCase());
+  if (!k) k = /^audio\//.test(ct) ? 'audio' : /^video\//.test(ct) ? 'video' : /^image\//.test(ct) ? 'image' : /zip|rar|7z|tar|gzip/.test(ct) ? 'archive' : 'doc';
+  return k === 'pdf' || k === 'text' ? 'doc' : k;
+}
+async function driveAdd(room, ws, dp, m) {
+  const now = Date.now(), w = room.driveWin && now - room.driveWin.t < 600000 ? room.driveWin : (room.driveWin = { t: now, n: 0 });
+  if (++w.n > 80) return send(ws, { type: 'notice', message: 'Drive: juda ko\'p so\'rov — birozdan keyin urinib ko\'ring' });
+  const mk = (name, kind, url, size) => ({ id: crypto.randomBytes(6).toString('hex'), name: safeName(name), cid: '', kind, url, size: size || 0, external: true, gainDb: null });
+  const addItems = list => {
+    if (!list.length || !rooms.has(room.code)) return;
+    let first = false;
+    for (const it of list) { room.items.push(it); if (!room.state.currentId) { room.state.currentId = it.id; first = true; } }
+    broadcast(room, { type: 'items', items: room.items });
+    if (first) broadcast(room, stateMsg(room));
+  };
+  try {
+    if (dp.type === 'export') return addItems([mk(m.name || dp.name, dp.kind, dp.url, 0)]);
+    if (dp.type === 'file') {
+      send(ws, { type: 'notice', message: '☁️ Drive havolasi tekshirilmoqda…' });
+      const meta = await driveMeta(dp.id);
+      const name = m.name || meta.name;
+      return addItems([mk(name, driveKindOf(name, meta.ct), driveDirectUrl(dp.id), meta.size)]);
+    }
+    if (dp.type === 'folder') {
+      if (!GDRIVE_KEY) return send(ws, { type: 'notice', message: 'Drive papkasi uchun serverda GDRIVE_API_KEY kerak. Hozircha fayllar havolasini alohida joylang.' });
+      send(ws, { type: 'notice', message: '☁️ Drive papkasi o\'qilmoqda…' });
+      const q = encodeURIComponent(`'${dp.id}' in parents and trashed=false`);
+      const { buf } = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&pageSize=50&fields=files(id,name,mimeType,size)&key=${encodeURIComponent(GDRIVE_KEY)}`, new Set(['www.googleapis.com']));
+      const list = [];
+      for (const f of (JSON.parse(buf.toString('utf8')).files || [])) {
+        const mt = f.mimeType || '';
+        if (mt === 'application/vnd.google-apps.folder') continue;
+        if (mt === 'application/vnd.google-apps.spreadsheet') list.push(mk(f.name + '.xlsx', 'doc', `https://docs.google.com/spreadsheets/d/${f.id}/export?format=xlsx`, 0));
+        else if (mt === 'application/vnd.google-apps.document') list.push(mk(f.name + '.docx', 'doc', `https://docs.google.com/document/d/${f.id}/export?format=docx`, 0));
+        else if (mt === 'application/vnd.google-apps.presentation') list.push(mk(f.name + '.pptx', 'doc', `https://docs.google.com/presentation/d/${f.id}/export/pptx`, 0));
+        else if (!mt.startsWith('application/vnd.google-apps.')) list.push(mk(f.name, driveKindOf(f.name, mt), driveDirectUrl(f.id), Number(f.size) || 0));
+      }
+      if (!list.length) return send(ws, { type: 'notice', message: 'Papka bo\'sh yoki ochiq emas ("Havolaga ega hamma ko\'ra oladi")' });
+      addItems(list);
+      send(ws, { type: 'notice', message: `☁️ Drive papkasidan ${list.length} ta fayl qo'shildi` });
+    }
+  } catch (e) { send(ws, { type: 'notice', message: '☁️ ' + ((e && e.name === 'TimeoutError') ? 'Drive javob bermadi (vaqt tugadi)' : (e && e.message) || 'Drive xatosi') }); }
+}
 // 📎 Fayldan quiz: xom oqim (JPG/PNG/HEIC/PDF, AI_FILE_MB gacha). Fayl diskka yoziladi, turi mazmuniga qarab tekshiriladi.
 app.post('/api/rooms/:code/ai-file', (req, res) => {
   const room = rooms.get(req.params.code);
@@ -1284,8 +1413,7 @@ app.post('/api/rooms/:code/upload', (req, res) => {
 
   const name = safeName(req.query.name);
   const ext = path.extname(name).toLowerCase();
-  const kind = kindOf(ext);
-  if (!kind) return res.status(415).json({ error: 'Bu format qo\'llab-quvvatlanmaydi' });
+  const kind = kindOfFile(ext);
   const cid = String(req.query.cid || '').replace(/[^a-z0-9]/gi, '').slice(0, 20);
 
   const len = Number(req.headers['content-length']) || 0;
@@ -1612,6 +1740,9 @@ wss.on('connection', (ws, req) => {
     room.lastSeen = Date.now();
     if (m.type.charCodeAt(0) === 97 && m.type.startsWith('att-')) return ATT.handle(room, ws, ctx, m);   // davomat
 
+    if (m.type === 'bye') { if (ctx.role === 'receiver' && room.roster && ctx.tok) room.roster.delete(ctx.tok); return; }   // receiver o'zi chiqdi: oflayn bo'lib qolmaydi
+    if (m.type === 'members-sync') { if (ctx.role === 'host') flushMembers(room); return; }   // Transmitter ro'yxatni darhol so'raydi (xabar yo'qolsa ham receiverlar ko'rinadi)
+
     if (m.type === 'ready') {
       if (ctx.role === 'receiver' && m.id === room.state.currentId) { ctx.ready = m.ok !== false; sendMembers(room); }
       return;
@@ -1835,7 +1966,11 @@ wss.on('connection', (ws, req) => {
       }
       case 'kick': {
         const c = [...room.clients].find(x => x.ctx && x.ctx.id === m.id);
-        if (!c) break;
+        if (!c) {                                                       // oflayn receiver: ro'yxatdan olib tashlanadi
+          if (room.roster) for (const [tok, e] of room.roster) if (e.id === m.id) { room.roster.delete(tok); room.tokens.delete(tok); sendMembers(room); break; }
+          break;
+        }
+        if (room.roster && c.ctx.tok) room.roster.delete(c.ctx.tok);
         if (c.ctx.tok) room.tokens.delete(c.ctx.tok);
         send(c, { type: 'kicked' });
         try { c.close(); } catch {}
@@ -1950,6 +2085,8 @@ wss.on('connection', (ws, req) => {
         let u;
         try { u = new URL(String(m.url)); } catch { return send(ws, { type: 'notice', message: 'Havola noto\'g\'ri' }); }
         if (!/^https?:$/.test(u.protocol)) return send(ws, { type: 'notice', message: 'Faqat http/https havola' });
+        const dp = driveParse(u);                       // Google Drive / Docs / Sheets / Slides / papka havolasi
+        if (dp) { driveAdd(room, ws, dp, m); break; }
         const ext = path.extname(u.pathname).toLowerCase();
         const yid = ytIdOf(u);
         const item = yid ? {
@@ -2115,7 +2252,8 @@ function onJoin(ws, m, approved) {
 // Proksi/hosting uzilib qolmasligi uchun yurak urishi
 setInterval(() => {
   wss.clients.forEach(ws => {
-    if (!ws.isAlive) return ws.terminate();
+    if (!ws.isAlive && (ws.missed = (ws.missed || 0) + 1) >= 2) return ws.terminate();   // bitta o'tkazib yuborilgan ping uchun uzmaymiz (telefon/proksi)
+    if (ws.isAlive) ws.missed = 0;
     ws.isAlive = false;
     try { ws.ping(); } catch {}
   });

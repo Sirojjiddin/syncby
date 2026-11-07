@@ -1,7 +1,8 @@
 'use strict';
 // 📋 Davomat moduli (o'quv markaz). Hammasi xotirada, xona yopilganda o'chadi.
 // Tezlik: belgilash O(1) (Map), o'zgarishlar 300 ms da bir marta paketlab yuboriladi (delta), ro'yxat qidiruvi mijozda.
-const MAXN = 5000, PHOTO_MAX = 120000, FRESH_MS = 120000, ACC_MAX = 10000;   // kompyuterda Wi-Fi/IP joylashuvi aniqligi past (±km) bo'lishi mumkin — rad etmaymiz, «xavf» sifatida belgilaymiz
+const MAXN = 5000, MAXD = 800, PHOTO_MAX = 120000, FRESH_MS = 120000, ACC_MAX = 10000;   // kompyuterda Wi-Fi/IP joylashuvi aniqligi past (±km) bo'lishi mumkin — rad etmaymiz, «xavf» sifatida belgilaymiz
+const DATE_RE = /^\d{2}\.\d{2}\.\d{4}$/;   // davomat sanasi ustuni (dd.mm.yyyy); MAXD — fayldagi sana ustunlarining eng ko'pi
 // 🙂 Face ID: brauzer 128 o'lchamli yuz vektorini (face-api.js, ResNet) hisoblaydi, server vektorlarni Evklid masofasi bilan solishtiradi.
 // Vektor Int16 (x10000) → base64 (344 belgi) ko'rinishida saqlanadi: Excel katagiga sig'adi, fayldan qayta yuklanadi.
 const FD = 128, TPL_MAX = 8, TPL_CHARS = 344, QS = 10000, DUP_TH = 0.40, MARGIN = 0.05;
@@ -53,7 +54,7 @@ function matchFace(A, q, group) {
 }
 
 function newAtt() {
-  return { title: '', names: [], groups: [], ph: [], pv: [], fid: [], faces: [], fs: [], rg: [], regTok: new Map(), lt: null, def: null, defOn: false, open: false, openedAt: 0,
+  return { title: '', names: [], groups: [], ph: [], pv: [], dates: [], fid: [], faces: [], fs: [], rg: [], regTok: new Map(), lt: null, def: null, defOn: false, open: false, openedAt: 0,
     cfg: { show: true, photoReq: false, locReq: true, selfReg: false, face: true, faceOnly: true, faceLive: true, faceLvl: 'normal', radius: 150, lateMin: 0, center: null, codeGive: false },
     marks: new Map(), photos: new Map(), hashes: new Map(), byTok: new Map(),
     dirty: new Set(), tkAdd: new Set(), tkDel: new Set(), timer: null, cc: null, ver: 0, medVer: -1, med: null, all: false };
@@ -140,7 +141,8 @@ function adoptName(room, ws, ctx, full) {
   const nm = shortName(full); if (!nm || ctx.name === nm || ctx.role !== 'receiver') return;
   ctx.name = nm; if (H.rename) H.rename(room, ws, nm);
 }
-const metaMsg = A => ({ type: 'att-fmeta', full: true, fid: A.fid, fc: A.faces.map(f => (f ? f.length : 0)), ph: A.ph, pv: A.pv, rg: A.rg });
+// pv[i] — o'quvchining davomat tarixi: dates[k] sanasi uchun bitta belgi ('+' keldi, '-' kelmadi, '.' ma'lumot yo'q)
+const metaMsg = A => ({ type: 'att-fmeta', full: true, fid: A.fid, fc: A.faces.map(f => (f ? f.length : 0)), ph: A.ph, pv: A.pv, dates: A.dates, rg: A.rg });
 const metaUpd = (A, sids) => ({ type: 'att-fmeta', upd: sids.map(i => [i, A.fid[i] || '', A.faces[i] ? A.faces[i].length : 0]), n: faceCount(A) });
 const pushCfg = (room, A) => H.sendAll([room.host, ...room.clients].filter(Boolean), { type: 'att-cfg', cfg: pubCfg(A), title: A.title });
 
@@ -270,6 +272,56 @@ function handle(room, ws, ctx, m) {
       if (!A) return; const sid = Number(m.sid); if (!Number.isInteger(sid) || !A.faces[sid]) return;
       A.faces[sid] = null; A.fs[sid] = null; H.send(room.host, metaUpd(A, [sid])); pushCfg(room, A); break;
     }
+    case 'att-reset': {                                    // 🗑 Davomatni qaytadan boshlash: o'quvchilar, Face ID kodlari, tarix va belgilar — hammasi tizimdan o'chadi (sozlamalar qoladi)
+      const a = A; if (!a) break;
+      clearTimeout(a.timer); clearTimeout(a.lt); a.timer = null; a.lt = null;
+      a.title = ''; a.names = []; a.groups = []; a.ph = []; a.pv = []; a.dates = []; a.fid = []; a.faces = []; a.fs = []; a.rg = [];
+      a.regTok.clear(); a.marks.clear(); a.photos.clear(); a.hashes.clear(); a.byTok.clear(); a.dirty.clear(); a.tkAdd.clear(); a.tkDel.clear();
+      a.cc = null; a.med = null; a.medVer = -1; a.all = false; a.ver++; a.openedAt = a.open ? Date.now() : 0;
+      if (room.faceNames) room.faceNames.clear();           // yuz orqali olingan ismlar ham unutiladi
+      for (const w of [room.host, ...room.clients]) if (w && w.ctx) { w.ctx.fc = null; H.send(w, { type: 'att-reset' }); H.send(w, listMsg(a, w.ctx)); }
+      H.send(room.host, fullMsg(a)); H.send(room.host, metaMsg(a));
+      break;
+    }
+    case 'att-del': {                                      // ✕ o'quvchini ro'yxatdan chiqarish: ism, yuz, belgi va tarixi o'chadi; qolganlarning raqami (indeksi) qayta hisoblanadi
+      if (!A) return; const sid = Number(m.sid); if (!Number.isInteger(sid) || sid < 0 || sid >= A.names.length) return;
+      const name = A.names[sid];
+      for (const k of ['names', 'groups', 'ph', 'pv', 'fid', 'faces', 'fs', 'rg']) A[k].splice(sid, 1);
+      const sh = x => (x > sid ? x - 1 : x), remap = mp => { const o = new Map(); for (const [k, v] of mp) if (k !== sid) o.set(sh(k), v); return o; };
+      const mm = new Map(); for (const [k, v] of A.marks) if (k !== sid) { v.sid = sh(k); mm.set(sh(k), v); } A.marks = mm;
+      A.photos = remap(A.photos);
+      const hs = new Map(); for (const [h, set] of A.hashes) { const ns = new Set(); for (const x of set) if (x !== sid) ns.add(sh(x)); if (ns.size) hs.set(h, ns); } A.hashes = hs;
+      for (const mp of [A.byTok, A.regTok]) for (const [t, x] of [...mp]) { if (x === sid) mp.delete(t); else mp.set(t, sh(x)); }
+      A.dirty.clear(); A.tkAdd.clear(); A.tkDel.clear(); A.all = true; A.ver++; A.cc = null;
+      for (const w of room.clients) if (w.ctx) w.ctx.fc = null;     // yuz tasdig'i eski raqamga bog'langan edi — bekor
+      resync(room, A); H.send(ws, { type: 'att-deleted', name });
+      break;
+    }
+    case 'att-edit': {                                     // ✏ o'quvchi ma'lumotlarini tahrirlash: F.I.Sh, guruh, telefon, Face ID, Face kod
+      if (!A) return; const sid = Number(m.sid); if (!Number.isInteger(sid) || sid < 0 || sid >= A.names.length) return;
+      const bad = msg => H.send(ws, { type: 'att-ferr', msg });
+      const n = cl(m.n, 60), g = cl(m.g, 30), p = cl(m.p, 24), f = cl(m.f, 16);
+      if (nameWords(n) < 2) return bad('Familiya va ismni to‘liq yozing');
+      if (p && p.replace(/\D/g, '').length < 7) return bad('Telefon raqami noto‘g‘ri');
+      const dupN = findByName(A, n, g); if (dupN >= 0 && dupN !== sid) return bad(`«${A.names[dupN]}» shu guruhda allaqachon bor`);
+      if (f) for (let j = 0; j < A.fid.length; j++) if (j !== sid && A.fid[j] === f) return bad(`Face ID ${f} «${A.names[j]}» da band`);
+      let faces, keep, clearFace = false;
+      if (typeof m.c === 'string') {
+        const raw = m.c.split(/[|\s;,]+/).filter(Boolean).slice(0, TPL_MAX);
+        if (!raw.length) clearFace = true;
+        else {
+          faces = []; keep = [];
+          for (const x of raw) { const t = decTpl(x); if (!t) return bad('Face kod noto‘g‘ri yoki buzilgan (har bir qism 344 belgi, qismlar | bilan ajratiladi)'); faces.push(t); keep.push(x); }
+          if (faces.length < 2) return bad('Face kod kamida 2 qismdan iborat bo‘lishi kerak');
+          for (let j = 0; j < A.faces.length; j++) { if (j === sid || !A.faces[j]) continue; for (const q of faces) if (minDist(q, A.faces[j]) < DUP_TH) return bad(`Bu yuz «${A.names[j]}» ga tegishli`); }
+        }
+      }
+      A.names[sid] = n; A.groups[sid] = g; A.ph[sid] = p; A.fid[sid] = f;
+      if (clearFace) { A.faces[sid] = null; A.fs[sid] = null; } else if (faces) { A.faces[sid] = faces; A.fs[sid] = keep; }
+      if (A.faces[sid] && !A.fid[sid]) A.fid[sid] = nextFid(A);
+      A.ver++; A.all = true; H.send(ws, { type: 'att-edited', sid, name: n }); resync(room, A);
+      break;
+    }
     case 'att-clear': if (A) { A.marks.clear(); A.photos.clear(); A.hashes.clear(); A.byTok.clear(); A.openedAt = A.open ? Date.now() : 0; A.ver++; A.cc = null;
       const all = [room.host, ...room.clients].filter(Boolean); all.forEach(w => H.send(w, listMsg(A, w.ctx))); H.send(room.host, fullMsg(A)); } break;
   }
@@ -294,6 +346,9 @@ function queueSync(room, A) {                            // ro'yxat o'zgardi: 40
     A.lt = null; if (room.att !== A) return;
     for (const w of [room.host, ...room.clients]) if (w && w.ctx) { H.send(w, listMsg(A, w.ctx)); if (w.ctx.role === 'host') { H.send(w, fullMsg(A)); H.send(w, metaMsg(A)); } }
   }, 400);
+}
+function resync(room, A) {                             // ro'yxat o'zgardi (o'chirish / tahrirlash): hamma qurilmaga darhol qayta yuboriladi
+  for (const w of [room.host, ...room.clients]) if (w && w.ctx) { H.send(w, listMsg(A, w.ctx)); if (w.ctx.role === 'host') { H.send(w, fullMsg(A)); H.send(w, metaMsg(A)); } }
 }
 function register(room, ws, ctx, m, A) {
   const now = Date.now(), bad = (why, msg) => H.send(ws, { type: 'att-regerr', why, msg });
@@ -352,11 +407,15 @@ function routes(app, express, rooms) {
     const arr = req.body && Array.isArray(req.body.students) ? req.body.students.slice(0, MAXN) : null;
     if (!arr || !arr.length) return res.status(400).json({ error: 'Ro\'yxat bo\'sh' });
     const A = room.att || (room.att = newAtt());
-    A.names = []; A.groups = []; A.ph = []; A.pv = []; A.fid = []; A.faces = []; A.fs = []; A.rg = []; A.regTok.clear();
+    A.names = []; A.groups = []; A.ph = []; A.pv = []; A.dates = []; A.fid = []; A.faces = []; A.fs = []; A.rg = []; A.regTok.clear();
+    // Davomat sanalari (ustunlar): 'dd.mm.yyyy', takrorlanmaydi; har o'quvchining v qatori shu tartibda ('+' / '-' / '.')
+    const srcCols = [];
+    (Array.isArray(req.body.dates) ? req.body.dates.slice(0, MAXD) : []).forEach((d, k) => { const t = cl(d, 10); if (DATE_RE.test(t) && !A.dates.includes(t)) { A.dates.push(t); srcCols.push(k); } });
     const usedF = new Set(); let bad = 0;
     for (const s of arr) {
       const n = cl(s && s.n, 60); if (!n) continue;
-      A.names.push(n); A.groups.push(cl(s.g, 30)); A.ph.push(cl(s.p, 24)); A.pv.push(cl(s.v, 1000));
+      A.names.push(n); A.groups.push(cl(s.g, 30)); A.ph.push(cl(s.p, 24));
+      { const v = typeof s.v === 'string' ? s.v : ''; A.pv.push(srcCols.map(k => (v[k] === '+' || v[k] === '-' ? v[k] : '.')).join('')); }
       let f = cl(s.f, 16); if (f && usedF.has(f)) f = ''; if (f) usedF.add(f); A.fid.push(f);
       const raw = Array.isArray(s.c) ? s.c : typeof s.c === 'string' ? s.c.split(/[|\s;]+/) : [], tp = [], ks = [];
       for (const x of raw.slice(0, TPL_MAX)) { const t = decTpl(x); if (t) { tp.push(t); ks.push(x); } else if (x) bad++; }
@@ -367,7 +426,7 @@ function routes(app, express, rooms) {
     A.title = cl(req.body.title, 80) || A.title;
     A.marks.clear(); A.photos.clear(); A.hashes.clear(); A.byTok.clear(); A.dirty.clear(); A.tkAdd.clear(); A.tkDel.clear(); A.cc = null; A.ver++;
     for (const w of [room.host, ...room.clients]) if (w && w.ctx) { H.send(w, listMsg(A, w.ctx)); if (w.ctx.role === 'host') { H.send(w, fullMsg(A)); H.send(w, metaMsg(A)); } }
-    res.json({ ok: true, count: A.names.length, faces: faceCount(A), badFaces: bad });
+    res.json({ ok: true, count: A.names.length, faces: faceCount(A), badFaces: bad, dates: A.dates.length });
   });
   app.get('/api/rooms/:code/att/faces', (req, res) => {          // faqat Transmitter: Face ID bazasini faylga saqlash uchun
     const room = gate(req, res); if (!room || !room.att) return res.json({ faces: [] });

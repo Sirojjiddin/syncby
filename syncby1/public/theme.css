@@ -1,0 +1,337 @@
+/* =====================================================================
+   Birlash — theme.css (v1)
+   style.css ustidan yuklanadi: wordmark, bosh sahifa, viktorina dizayni
+   va tezlik uchun qo'shimchalar. Mantiq (app.js) o'zgarmagan.
+   ===================================================================== */
+:root {
+  --font-brand: 'Unbounded', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --glass: rgba(20, 25, 46, .62);
+  --glass-line: rgba(255, 255, 255, .12);
+  --ease: cubic-bezier(.22, 1, .36, 1);
+  --q0b: #ff4d6d; --q1b: #4d9bff; --q2b: #ffc533; --q3b: #3ddc84;
+}
+
+/* ---------- Umumiy: silliq shrift, tezroq chizish ---------- */
+html { -webkit-text-size-adjust: 100%; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; scroll-behavior: smooth; }
+body { font-feature-settings: 'cv11', 'ss01'; }
+.view, .card, .big, .qopt, .qz-q { backface-visibility: hidden; }
+.view:not([hidden]) { animation: viewIn .5s var(--ease) both; }
+@keyframes viewIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.card {
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015)), var(--card); border-color: var(--glass-line); }
+::selection { background: rgba(var(--pri-rgb), .45); color: #fff; }
+:focus-visible { outline: 2px solid var(--cy); outline-offset: 3px; border-radius: 10px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 99px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.28); background-clip: padding-box; border: 3px solid transparent; }
+
+/* ---------- “Birlash” so'zi: sarlavhadagi logotip ---------- */
+.logo { gap: 10px; }
+#loogoi { width: 38px; height: 38px; max-width: 38px; flex: none; object-fit: contain; border-radius: 11px; box-shadow: 0 0 0 1px var(--glass-line), 0 6px 18px rgba(var(--pri-rgb), .35); transition: transform .4s var(--ease); }
+.logo:hover #loogoi { transform: rotate(-8deg) scale(1.08); }
+#brandName {
+  flex: 0 0 auto; max-width: min(62vw, 440px); padding: .14em .06em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-brand); font-weight: 800; font-size: 21px; letter-spacing: .01em; text-transform: capitalize; line-height: 1;
+  background: linear-gradient(100deg, #fff 0%, var(--cy) 28%, var(--pri) 55%, var(--pri2) 78%, #fff 100%);
+  background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  
+}
+@keyframes brandShine { to { background-position: -300% 0; } }
+.brand-sub { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--mut); align-self: flex-end; margin-bottom: 2px; }
+
+/* ---------- “Birlash” so'zi: bosh sahifadagi katta wordmark ---------- */
+.wordmark { display: flex; align-items: center; gap: 14px; margin: 4px 0 14px; }
+.wm-mark { position: relative; width: 58px; height: 58px; flex: none; display: grid; place-items: center; border-radius: 18px;
+  background: linear-gradient(145deg, rgba(var(--pri-rgb), .35), rgba(var(--pri2-rgb), .25)); border: 1px solid var(--glass-line);
+  box-shadow: 0 14px 34px rgba(var(--pri-rgb), .32), inset 0 1px 0 rgba(255,255,255,.25); }
+.wm-mark svg { width: 38px; height: 38px; overflow: visible; }
+.wm-mark .wm-a { stroke: url(#wmg); stroke-width: 3.2; stroke-linecap: round; fill: none; stroke-dasharray: 6 8; animation: wmFlow 1.4s linear infinite; }
+.wm-mark .wm-n { fill: #fff; filter: drop-shadow(0 0 6px rgba(var(--pri-rgb), .9)); }
+.wm-mark .wm-n.r { animation: wmPulse 2.4s ease-in-out infinite; }
+@keyframes wmFlow { to { stroke-dashoffset: -28; } }
+@keyframes wmPulse { 50% { transform: scale(1.35); transform-origin: 33px 19px; } }
+.wm-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.wm-word { display: flex; font-family: var(--font-brand); font-weight: 800; font-size: clamp(34px, 6.4vw, 54px); line-height: 1.05; letter-spacing: -.015em; }
+.wm-word span { display: inline-block; opacity: 0;
+  background: linear-gradient(100deg, #fff 0%, var(--cy) 30%, var(--pri) 58%, var(--pri2) 82%, #fff 100%); background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 6px 22px rgba(var(--pri-rgb), .4));
+  animation: letterUp .8s var(--ease) forwards, brandShine 6s linear infinite; animation-delay: calc(var(--i) * 70ms + .15s), calc(var(--i) * -140ms); }
+@keyframes letterUp { from { opacity: 0; transform: translateY(.45em) scale(.9); filter: blur(6px); } to { opacity: 1; transform: none; filter: drop-shadow(0 6px 22px rgba(var(--pri-rgb), .4)); } }
+.wm-tag { font-size: 11.5px; letter-spacing: .32em; text-transform: uppercase; color: var(--mut); font-weight: 700; }
+
+/* ---------- Bosh sahifa ---------- */
+.hero h1 { letter-spacing: -.02em; font-weight: 800; }
+.hero h1 .grad { background-size: 200% 100%; animation: brandShine 5s linear infinite; }
+.sub { font-size: 15px; }
+.sub a { color: var(--cy); text-decoration: none; border-bottom: 1px dashed rgba(54,214,255,.5); }
+.sub a:hover { color: #fff; border-bottom-color: #fff; }
+.home-bg .orb { filter: blur(2px); }
+.big { border: 1px solid rgba(255,255,255,.16); border-radius: 26px; transition: transform .35s var(--ease), box-shadow .35s var(--ease), filter .2s; }
+.big:hover { transform: translateY(-6px) scale(1.012); box-shadow: 0 22px 54px rgba(75,70,220,.5); }
+.big.alt:hover { box-shadow: 0 22px 54px rgba(20,140,160,.5); }
+.big .ico { background: rgba(255,255,255,.2); box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 8px 18px rgba(0,0,0,.2); transition: transform .35s var(--ease); }
+.big:hover .ico { transform: rotate(-6deg) scale(1.08); }
+.side .flow li { transition: transform .3s var(--ease), background .2s; }
+.side .flow li:hover { transform: translateX(4px); }
+.side-rx .flow li:hover { transform: translateX(-4px); }
+button.primary { position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,.2); box-shadow: 0 10px 28px rgba(var(--pri-rgb), .45), inset 0 1px 0 rgba(255,255,255,.3); }
+button.primary::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.28) 50%, transparent 65%); transform: translateX(-120%); transition: transform .7s var(--ease); }
+button.primary:hover::after { transform: translateX(120%); }
+input[type=text], input:not([type]), input[type=url], select { border-radius: 16px; background: rgba(255,255,255,.05); }
+.footer { background: linear-gradient(180deg, transparent, rgba(0,0,0,.25)); }
+.social-links a { border: 1px solid var(--glass-line); }
+
+/* ---------- VIKTORINA: savol kartasi ---------- */
+.qz-q {
+  position: relative; background: linear-gradient(180deg, #ffffff, #eef1fb); color: #14172b; border-radius: 22px; font-weight: 800; letter-spacing: -.01em;
+  box-shadow: 0 10px 0 rgba(10,12,30,.22), 0 22px 44px rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.9);
+  animation: qIn .55s var(--ease) backwards;
+}
+.qz-q::before { content: ''; position: absolute; left: 18px; right: 18px; top: 0; height: 4px; border-radius: 0 0 6px 6px; background: linear-gradient(90deg, var(--q0), var(--q2), var(--q3), var(--q1)); }
+@keyframes qIn { from { opacity: 0; transform: translateY(-16px) scale(.97); } to { opacity: 1; transform: none; } }
+.qz-img { border-radius: 18px; box-shadow: 0 12px 30px rgba(0,0,0,.35); }
+
+/* ---------- VIKTORINA: javob plitalari ---------- */
+.qopt {
+  isolation: isolate; overflow: hidden; border-radius: 20px; border: 1px solid rgba(255,255,255,.22);
+  box-shadow: 0 8px 0 rgba(0,0,0,.3), 0 16px 30px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.35);
+  transition: transform .25s var(--ease), box-shadow .25s var(--ease), opacity .25s, filter .2s;
+  animation: optIn .5s var(--ease) backwards;
+}
+.qopt::before { content: ''; position: absolute; z-index: -1; inset: 0; background: linear-gradient(160deg, rgba(255,255,255,.3), rgba(255,255,255,0) 45%, rgba(0,0,0,.2)); pointer-events: none; }
+.qopt::after { content: ''; position: absolute; z-index: -1; top: -40%; left: -20%; width: 60%; height: 180%; background: rgba(255,255,255,.12); transform: rotate(18deg) translateX(-160%); transition: transform .8s var(--ease); pointer-events: none; }
+button.qopt:hover { transform: translateY(-3px); filter: brightness(1.08); }
+button.qopt:hover::after { transform: rotate(18deg) translateX(420%); }
+button.qopt:active { transform: translateY(5px); box-shadow: 0 3px 0 rgba(0,0,0,.3), 0 4px 10px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.25); }
+.qz-grid .qopt:nth-child(1) { animation-delay: .04s; } .qz-grid .qopt:nth-child(2) { animation-delay: .1s; }
+.qz-grid .qopt:nth-child(3) { animation-delay: .16s; } .qz-grid .qopt:nth-child(4) { animation-delay: .22s; }
+@keyframes optIn { from { opacity: 0; transform: translateY(22px) scale(.96); } to { opacity: 1; transform: none; } }
+.qopt .sh { display: grid; place-items: center; width: 1.5em; height: 1.5em; font-size: clamp(20px, 4vw, 34px); border-radius: 12px; background: rgba(0,0,0,.22); box-shadow: inset 0 1px 0 rgba(255,255,255,.25); text-shadow: none; }
+.qg-body .qopt .sh { font-size: clamp(24px, 4vw, 56px); }
+.qopt .tx { text-shadow: 0 2px 6px rgba(0,0,0,.28); letter-spacing: -.005em; }
+.qopt .cnt { background: rgba(0,0,0,.32); box-shadow: inset 0 1px 0 rgba(255,255,255,.18); }
+.qopt.good { outline: 0; animation: goodPulse 1.1s ease-in-out infinite; box-shadow: 0 0 0 4px #fff, 0 0 46px rgba(255,255,255,.65), 0 8px 0 rgba(0,0,0,.3); }
+@keyframes goodPulse { 50% { transform: scale(1.025); } }
+.qopt.mine { outline: 0; box-shadow: 0 0 0 4px rgba(255,255,255,.95), 0 0 0 8px rgba(255,255,255,.2), 0 8px 0 rgba(0,0,0,.3); }
+.qopt.dim { opacity: .3; filter: saturate(.4) brightness(.8); transform: scale(.98); }
+.qz-grid.locked .qopt { opacity: .55; }
+
+/* ---------- VIKTORINA: taymer, hisoblagich, soat ---------- */
+.qz-timer { height: 14px; background: rgba(255,255,255,.1); box-shadow: inset 0 2px 4px rgba(0,0,0,.35); border: 1px solid var(--glass-line); }
+.qz-timer i { position: relative; border-radius: 99px; box-shadow: 0 0 18px rgba(62,207,142,.55); }
+.qz-timer i::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); background-size: 60% 100%; background-repeat: no-repeat; animation: timerShine 1.6s linear infinite; }
+@keyframes timerShine { from { background-position: -80% 0; } to { background-position: 180% 0; } }
+.qz-time { text-shadow: 0 4px 18px rgba(0,0,0,.4); }
+.qz-count { background: radial-gradient(circle at 50% 50%, rgba(138,91,255,.35), rgba(11,14,26,.88) 65%); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  background-image: radial-gradient(circle at 50% 50%, rgba(138,91,255,.35), rgba(11,14,26,.88) 65%); text-shadow: 0 0 50px rgba(138,91,255,.95), 0 8px 0 rgba(0,0,0,.25); }
+.qz-clock { background: conic-gradient(from 210deg, #8a5bff, #5b8cff, #36d6ff, #8a5bff); border: 4px solid rgba(255,255,255,.25); box-shadow: 0 8px 0 rgba(0,0,0,.28), 0 0 34px rgba(138,91,255,.55); }
+.qz-clock b { text-shadow: 0 3px 10px rgba(0,0,0,.4); }
+.qg-stat, .qg-ans { background: var(--glass); border: 1px solid var(--glass-line); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 10px 26px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.12); }
+
+/* ---------- VIKTORINA: ekranlar (fon, kutish zali, o'yinchi) ---------- */
+.qzgame, .quizplay {
+  background: radial-gradient(60% 50% at 12% 0%, rgba(138,91,255,.55), transparent 70%), radial-gradient(55% 50% at 100% 100%, rgba(54,214,255,.32), transparent 70%),
+              radial-gradient(40% 40% at 90% 8%, rgba(255,77,109,.18), transparent 70%), #0a0d1c;
+}
+.qzgame::before, .quizplay::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: .5;
+  background-image: radial-gradient(rgba(255,255,255,.1) 1px, transparent 1.5px); background-size: 26px 26px; -webkit-mask-image: radial-gradient(70% 60% at 50% 40%, #000, transparent); mask-image: radial-gradient(70% 60% at 50% 40%, #000, transparent); }
+.qzgame > *, .quizplay > * { position: relative; z-index: 1; }
+.qg-bar { background: rgba(8,10,24,.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--glass-line); }
+.qg-join { background: linear-gradient(180deg, #fff, #eef1fb); border-radius: 28px; box-shadow: 0 10px 0 rgba(0,0,0,.22), 0 28px 60px rgba(0,0,0,.4); }
+.qg-code { background: linear-gradient(100deg, #2a49b8, #8a5bff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.qg-qr { box-shadow: 0 8px 22px rgba(0,0,0,.25); }
+.qg-bigcount { filter: drop-shadow(0 8px 26px rgba(138,91,255,.5)); animation: brandShine 5s linear infinite; background-size: 220% 100%; }
+.qg-chip { background: linear-gradient(135deg, rgba(var(--pri-rgb), .28), rgba(var(--pri2-rgb), .22)); border-color: rgba(255,255,255,.2); box-shadow: 0 6px 16px rgba(0,0,0,.25); }
+.qp-big .em { display: inline-block; animation: floaty 2.6s ease-in-out infinite; filter: drop-shadow(0 10px 20px rgba(0,0,0,.4)); }
+@keyframes floaty { 50% { transform: translateY(-10px) rotate(-4deg); } }
+.qp-banner { border-radius: 24px; border: 1px solid rgba(255,255,255,.25); box-shadow: 0 12px 34px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.35); animation: bannerIn .6s var(--ease) both; }
+@keyframes bannerIn { from { opacity: 0; transform: scale(.85) translateY(16px); } 60% { transform: scale(1.04); } to { opacity: 1; transform: none; } }
+.qp-banner.ok { background: linear-gradient(135deg, #17a864, #3ddc84 70%, #8cf0b8); }
+.qp-banner.no { background: linear-gradient(135deg, #c42a45, #ff4d6d 70%, #ff8aa0); }
+.qp-top .chip, .chip { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+
+/* ---------- VIKTORINA: reyting va podium ---------- */
+.lb li { background: linear-gradient(135deg, rgba(255,255,255,.09), rgba(255,255,255,.03)); border: 1px solid var(--glass-line); box-shadow: 0 6px 16px rgba(0,0,0,.2);
+  animation: lbIn .5s var(--ease) both; }
+.lb li:nth-child(1) { animation-delay: .05s; background: linear-gradient(135deg, rgba(255,213,74,.3), rgba(255,255,255,.04)); border-color: rgba(255,213,74,.45); }
+.lb li:nth-child(2) { animation-delay: .12s; background: linear-gradient(135deg, rgba(200,210,235,.24), rgba(255,255,255,.03)); border-color: rgba(200,210,235,.35); }
+.lb li:nth-child(3) { animation-delay: .19s; background: linear-gradient(135deg, rgba(230,160,106,.26), rgba(255,255,255,.03)); border-color: rgba(230,160,106,.4); }
+.lb li:nth-child(n+4) { animation-delay: .26s; }
+@keyframes lbIn { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+.lb li .pt { font-weight: 800; text-shadow: 0 0 14px rgba(54,214,255,.4); }
+.podium div { border-radius: 20px 20px 0 0; box-shadow: 0 -8px 30px rgba(0,0,0,.25), inset 0 2px 0 rgba(255,255,255,.55); transform-origin: bottom; animation: podUp .9s var(--ease) both; }
+.podium .p2 { animation-delay: .15s; } .podium .p1 { animation-delay: .35s; } .podium .p3 { animation-delay: .05s; }
+.podium .p1 { box-shadow: 0 -8px 40px rgba(255,213,74,.45), inset 0 2px 0 rgba(255,255,255,.6); }
+@keyframes podUp { from { transform: scaleY(.05); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ---------- VIKTORINA: studiya (sozlamalar, savol muharriri) ---------- */
+.qz-start-card { border-radius: 24px; }
+.qz-sum { background: linear-gradient(135deg, rgba(91,140,255,.26), rgba(138,91,255,.2)); border-bottom: 1px solid var(--glass-line); }
+.qz-grp > summary { transition: background .2s; }
+.qz-grp > summary:hover { background: rgba(255,255,255,.04); }
+.qz-startbar { background: linear-gradient(180deg, transparent, rgba(11,14,26,.92) 40%); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.qz-startbar .primary { border-radius: 18px; letter-spacing: .01em; }
+.qopt-row .tile { border-radius: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 4px 10px rgba(0,0,0,.25); }
+.qz-prev-card { border-radius: 24px; border: 1px solid var(--glass-line); box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+.qz-prev-row { border-radius: 14px; transition: transform .2s var(--ease), background .2s; }
+.qz-prev-row:hover { transform: translateX(3px); background: rgba(255,255,255,.09); }
+.tabs .tab { transition: background .2s, transform .2s var(--ease), box-shadow .2s; }
+.tabs .tab.on { box-shadow: 0 8px 22px rgba(var(--pri-rgb), .4); }
+
+/* ---------- Tezlik: ekrandan tashqari bloklarni chizmaslik ---------- */
+.footer, .qz-prev-list, .lb { content-visibility: auto; contain-intrinsic-size: auto 400px; }
+.aurora, .home-bg { will-change: transform; transform: translateZ(0); }
+
+/* ---------- Kichik ekranlar ---------- */
+@media (max-width: 560px) {
+  .wm-mark { width: 50px; height: 50px; border-radius: 16px; } .wm-mark svg { width: 32px; height: 32px; }
+  #brandName { font-size: 18px; }
+  .qopt { border-radius: 16px; box-shadow: 0 6px 0 rgba(0,0,0,.3), 0 10px 20px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.3); }
+  .qz-q { border-radius: 18px; box-shadow: 0 7px 0 rgba(10,12,30,.22), 0 14px 28px rgba(0,0,0,.3); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #brandName, .wm-word span, .hero h1 .grad, .qg-bigcount { animation: none !important; opacity: 1 !important; }
+}
+
+/* ---------- Bosh sahifa: "Birlash" ikki marta takrorlanmasin — faqat kichik yozuv ---------- */
+.eyebrow { display: inline-block; margin: 0 0 12px; padding: 6px 14px; border-radius: 999px; font-size: 11.5px; letter-spacing: .28em; text-transform: uppercase; font-weight: 700; color: var(--cy);
+  background: rgba(54,214,255,.08); border: 1px solid rgba(54,214,255,.25); }
+
+/* ---------- TEZLIK: og'ir effektlar olib tashlandi (qotishning sababi shular edi) ---------- */
+.hero h1 .grad { animation: none; }                             /* matn gradienti har kadrda qayta chizilardi */
+.qg-bigcount { animation: none; filter: none; }
+.qp-big .em { filter: none; }
+body:not(.home-on) .home-bg { visibility: hidden; }              /* bosh sahifada emas — fon animatsiyasi umuman ishlamasin */
+body:not(.home-on) .home-bg * { animation: none !important; }
+.home-bg .orb { filter: none; opacity: .8; }
+html.pl-lock .home-bg, html.pl-lock .aurora { visibility: hidden; }
+@media (hover: none), (max-width: 760px) { .home-bg .orb { animation: none; } .flow .arr, .flow li::after { animation-duration: 1.6s; } }
+@media (prefers-reduced-motion: reduce) { .home-bg *, .flow * { animation: none !important; } }
+
+/* Transmitter: yuklab olish receiverlarga yopiq bo'lsa ham tugma ko'rinadi, lekin belgi bilan */
+#dlLink.rx-off, #openLink.rx-off { opacity: .6; }
+#dlLink.rx-off::after, #openLink.rx-off::after { content: " · receiverlarga yopiq"; font-size: .8em; font-weight: 600; opacity: .85; }
+
+/* ---------- Word / Excel / PowerPoint ko'rinishi ---------- */
+.stage[data-kind="office"] .docview { display: block; }
+.stage[data-kind="office"] .doccard { display: none; }
+.docview { width: 100%; height: 60vh; overflow: auto; background: #e9ecf5; color: #14172b; -webkit-overflow-scrolling: touch; }
+.stage.big[data-kind="office"] .docview { height: 85vh; }
+.docview > iframe { width: 100%; height: 100%; border: 0; background: #fff; display: block; }
+.docview.dv-note { display: grid; place-items: center; background: #1d2753; color: #cfd6f5; font-weight: 600; }
+.dv-docx .docx-wrapper { background: transparent !important; padding: 8px !important; }
+.dv-docx .docx-wrapper > section.docx { margin: 0 auto 10px !important; box-shadow: 0 2px 14px rgba(0,0,0,.25) !important; }
+.dv-pptx { padding: 8px; display: grid; gap: 10px; justify-items: center; }
+.dv-pptx .pptx-preview-wrapper { background: transparent !important; }
+.dv-tabs { position: sticky; top: 0; z-index: 2; display: flex; gap: 4px; padding: 6px; overflow-x: auto; background: #d9deef; }
+.dv-tabs button { flex: none; padding: 6px 12px; border-radius: 8px; border: 1px solid #b9c1de; background: #fff; color: #14172b; font-weight: 600; font-size: 13px; }
+.dv-tabs button.on { background: #5b8cff; border-color: #5b8cff; color: #fff; }
+.dv-sheet { background: #fff; min-width: min-content; }
+.dv-sheet table { border-collapse: collapse; font-size: 13px; }
+.dv-sheet td, .dv-sheet th { border: 1px solid #d5dae8; padding: 4px 8px; white-space: pre; }
+.dv-more { padding: 8px 12px; color: #667; font-size: 12px; }
+
+/* =====================================================================
+   VIKTORINA v2 — tuzatishlar va yangi dizayn
+   1) animatsiya `both` rejimi plitalarning xira (dim/locked) holatini
+      va hover/bosish effektini bekor qilib qo'ygan edi — tuzatildi.
+   2) yuqori panel, taymer, savol kartasi, plitalar, natija ekranlari.
+   ===================================================================== */
+
+/* ---- Yuqori panel (o'yinchi) ---- */
+.qp-top { gap: 8px; padding: 6px 4px 10px; }
+.qp-top span:first-child { min-width: 0; font-size: clamp(14px, 3.6vw, 18px); letter-spacing: -.01em; }
+.qp-top .chip { flex: none; padding: 6px 11px; font-size: 13px; line-height: 1.2; border-radius: 999px; background: var(--glass); border: 1px solid var(--glass-line); white-space: nowrap; }
+.qp-top .chip.ok { background: rgba(61,220,132,.14); border-color: rgba(61,220,132,.4); color: #7dffb4; }
+.qp-top button.chip { box-sizing: border-box; width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; display: grid; place-items: center; font-size: 16px; cursor: pointer; }
+@media (max-width: 400px) { .qp-top .av-chip, .qp-top #qpPlayers { display: none; } }
+
+/* ---- Taymer ---- */
+.qz-timer { height: 12px; border-radius: 99px; }
+.qz-timer i { background: linear-gradient(90deg, #3ddc84, #7be89f); transition: width .1s linear, background .3s; }
+.qp-body:has(.qz-time.low) .qz-timer i, .qg-body:has(.low) .qz-timer i { background: linear-gradient(90deg, #ff4d6d, #ff8a5c); box-shadow: 0 0 18px rgba(255,77,109,.6); }
+.qz-time { align-self: center; display: grid; place-items: center; min-width: 58px; height: 58px; margin: -2px 0; padding: 0 14px; border-radius: 999px; font-size: 28px; line-height: 1;
+  background: var(--glass); border: 1px solid var(--glass-line); box-shadow: 0 8px 20px rgba(0,0,0,.3); flex: none; }
+.qz-time:empty { visibility: hidden; }
+.qz-time.low { border-color: rgba(255,77,109,.7); box-shadow: 0 0 24px rgba(255,77,109,.5); }
+
+/* ---- Savol kartasi: yuqori rangli chiziq burchakdan chiqib ketmasin ---- */
+.qz-q { overflow: hidden; padding-top: calc(clamp(14px, 2.6vh, 30px) + 6px); }
+.qz-q::before { left: 0; right: 0; top: 0; height: 6px; border-radius: 0; }
+.qz-q.hidq { background: linear-gradient(180deg, #2f3458, #232744); border-color: rgba(255,255,255,.12); }
+
+/* ---- Javob plitalari ---- */
+.qz-grid { gap: clamp(10px, 1.6vw, 18px); padding-bottom: 10px; }
+.qopt { text-align: left; font-family: inherit; cursor: pointer; }
+.qopt .tx { text-align: left; }
+.qopt.mine { animation: none; }
+.qopt.mine::after { content: '✔'; position: absolute; z-index: 1; top: 8px; right: 12px; width: 28px; height: 28px; display: grid; place-items: center;
+  border-radius: 50%; background: #fff; color: #14172b; font-size: 15px; font-weight: 900; transform: none; left: auto; }
+.qz-grid.locked .qopt:not(.mine) { opacity: .45; filter: saturate(.6); }
+.qz-grid.locked .qopt.mine { opacity: 1; }
+button.qopt:disabled { cursor: default; }
+
+/* reveal: to'g'ri javob yorqin, qolganlari xira */
+.qopt.dim { opacity: .32; filter: saturate(.45) brightness(.85); }
+.qopt.good { opacity: 1; filter: none; }
+.qopt .mk { display: grid; place-items: center; width: 1.4em; height: 1.4em; border-radius: 50%; background: rgba(255,255,255,.22); font-size: clamp(20px, 3.4vw, 34px); }
+.qopt.good .mk { background: #fff; color: #1f9d63; }
+
+/* ---- Pastki qismi kesilib qolmasin ---- */
+.qg-body { padding-bottom: calc(clamp(8px, 1.6vh, 16px) + 10px); }
+.qp-body { padding-bottom: 12px; }
+.qp-wait { padding: 10px 14px; border-radius: 14px; background: var(--glass); border: 1px solid var(--glass-line); }
+.qp-hint { padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,.06); }
+
+/* ---- Natija bannerlari, reyting sarlavhasi ---- */
+.qp-banner { padding: 16px 18px; line-height: 1.25; }
+.qp-banner small { font-size: 15px; opacity: .92; }
+.qp-body > h2, .qg-side h2 { margin: 14px 0 4px; font-size: clamp(18px, 4.6vw, 24px); letter-spacing: -.01em; }
+.lb li { padding: 11px 14px; margin: 7px 0; border-radius: 16px; }
+.lb li .nm { min-width: 0; }
+.lb li .dl { padding: 2px 8px; border-radius: 999px; background: rgba(61,220,132,.16); font-weight: 800; }
+.rest-h { margin: 16px 0 6px; font-size: 15px; color: var(--mut); text-transform: uppercase; letter-spacing: .08em; }
+
+/* ---- Rasm ---- */
+.qz-imgw { position: relative; display: flex; justify-content: center; }
+.qz-img { max-width: 100%; height: auto; }
+
+/* ---- Telefon: past ekranlarda ixchamroq ---- */
+@media (max-width: 480px) {
+  .qz-q { border-radius: 18px; box-shadow: 0 6px 0 rgba(10,12,30,.22), 0 14px 28px rgba(0,0,0,.35); }
+  .qopt { border-radius: 16px; box-shadow: 0 5px 0 rgba(0,0,0,.3), 0 10px 20px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.35); }
+  .qopt .sh { width: 1.35em; height: 1.35em; }
+}
+@media (max-height: 680px) {
+  .qz-time { min-width: 46px; height: 46px; font-size: 22px; }
+  .qz-q { padding-top: 16px; padding-bottom: 12px; }
+  .qp-body .qz-grid { grid-auto-rows: minmax(54px, 1fr); }
+}
+
+/* ---------- 🏫 O'quv markaz hamkorlik sarlavhasi: responsive ---------- */
+.top { flex-wrap: wrap; row-gap: 8px; }
+.logo { flex: 1 1 auto; min-width: 0; max-width: 100%; }
+.logo > * { min-width: 0; }
+#brandName { flex: 0 1 auto; min-width: 0; }
+.brand-sub { flex: none; white-space: nowrap; }
+.top-r { flex: 0 1 auto; min-width: 0; }
+@media (max-width: 640px) {
+  .top { padding: 10px 12px; }
+  #brandName { max-width: 50vw; }
+  .brand-sub { font-size: 9px; letter-spacing: .14em; }
+  /* markaz bilan hamkorlikda: tugmalar logotip ostiga tushadi, hech narsa sig'may qolmaydi */
+  .top:has(#brandSub:not([hidden])) .top-r { flex: 1 1 100%; justify-content: flex-start; gap: 6px; }
+  .top-r .fn-btn { padding: 8px 12px; font-size: 13px; margin-left: auto; }
+  .top-r .memchip { padding: 5px 11px; } .top-r .memchip b { font-size: 17px; }
+  .top-r .netbox { padding: 6px 10px; font-size: 12px; }
+}
+@media (max-width: 420px) {
+  #brandName { max-width: 46vw; font-size: 17px; }
+  .logo { gap: 8px; }
+  .brand-sub { display: none; }
+}
+@media (max-width: 340px) {
+  #brandName { font-size: 15px; max-width: 40vw; }
+  .logo-swap, .logo-swap #loogoi, .logo.center-logo .logo-swap > img, .logo.center-logo .logo-swap > .logo-mark { width: 32px; height: 32px; max-width: 32px; }
+  .top-r .fn-btn { font-size: 12px; padding: 7px 10px; }
+}

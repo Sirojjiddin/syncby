@@ -4,8 +4,8 @@
 const { S, send, toast, isHost, $, makeZip, xlsxToRows, unzipDocx, sNow } = window.SC;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const D = { title: '', n: [], g: [], T: [], cfg: { open: false, show: true, photoReq: false, locReq: true, face: true, faceOnly: true, faceLive: true, faceLvl: 'normal', faceN: 0, selfReg: false, lateMin: 0, radius: 150, center: null, codeGive: false }, taken: new Set(), me: null,
-  fm: { fid: [], fc: [], ph: [], pv: [], rg: [] },
-  rows: new Map(), st: null, c: null, filter: 'all', q: '', shown: 120 };
+  fm: { fid: [], fc: [], ph: [], pv: [], rg: [], dates: [] },
+  rows: new Map(), st: null, c: null, filter: 'all', q: '', shown: 120, mshown: 60, thSel: '', edited: false };
 const WHY = { far: 'Juda uzoqda', warn: 'Radiusdan tashqarida', noloc: 'Joylashuv yo\'q', lowacc: 'GPS aniqligi past', dupphoto: 'Bir xil rasm', nophoto: 'Rasm yo\'q', nolive: 'Jonlilik tasdiqlanmadi' };
 const pad = n => String(n).padStart(2, '0'), hms = t => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
 const fmtD = d => d == null ? '—' : d < 1000 ? d + ' m' : (d / 1000).toFixed(1) + ' km';
@@ -145,27 +145,42 @@ async function openClaim(i) {
 const X = t => String(t).replace(/[<>&"\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] || ''));
 const colL = i => { let s = ''; i++; while (i > 0) { const r = (i - 1) % 26; s = String.fromCharCode(65 + r) + s; i = (i - 1 - r) / 26; } return s; };
 const H = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>', NSR = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', NSP = 'http://schemas.openxmlformats.org/package/2006/relationships';
-const STYLES = H + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>' +
-  '<fills count="7"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' + ['FF2A49B8', 'FFC6EFCE', 'FFFFC7CE', 'FFFFEB9C', 'FFEEF1FB'].map(c => `<fill><patternFill patternType="solid"><fgColor rgb="${c}"/><bgColor indexed="64"/></patternFill></fill>`).join('') + '</fills>' +
-  '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="7">' +
-  [[0, 0], [1, 2], [0, 3], [0, 4], [0, 5], [2, 0], [2, 6]].map(([f, l]) => `<xf numFmtId="0" fontId="${f}" fillId="${l}" borderId="0" xfId="0" applyFont="1" applyFill="1"/>`).join('') + '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+// Uslublar: 0–6 — eski varaqlar (hisobot) uchun o'zgarmagan; 7–13 — «Standart format» (o'quvchilar ro'yxati + sana ustunlari) uchun
+const BLUE = 'FF3048B1', GRAY = 'FFAAAAAA';
+const AL = (h, v, w) => `<alignment horizontal="${h}" vertical="${v}"${w ? ' wrapText="1"' : ''}/>`;
+const XF = (font, fill, border, al) => `<xf numFmtId="0" fontId="${font}" fillId="${fill}" borderId="${border}" xfId="0" applyFont="1" applyFill="1" applyBorder="1"` + (al ? ` applyAlignment="1">${al}</xf>` : '/>');
+const STYLES = H + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="6"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font>' +
+  '<font><sz val="20"/><name val="Times New Roman"/></font><font><b/><sz val="12"/><color rgb="FF00B7EA"/><name val="Calibri"/></font><font><b/><sz val="12"/><color rgb="FFEA4025"/><name val="Calibri"/></font></fonts>' +
+  '<fills count="8"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' + ['FF2A49B8', 'FFC6EFCE', 'FFFFC7CE', 'FFFFEB9C', 'FFEEF1FB', BLUE].map(c => `<fill><patternFill patternType="solid"><fgColor rgb="${c}"/><bgColor indexed="64"/></patternFill></fill>`).join('') + '</fills>' +
+  `<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border>${['left', 'right', 'top', 'bottom'].map(k => `<${k} style="thin"><color rgb="${GRAY}"/></${k}>`).join('')}<diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="14">` +
+  [[0, 0], [1, 2], [0, 3], [0, 4], [0, 5], [2, 0], [2, 6]].map(([f, l]) => `<xf numFmtId="0" fontId="${f}" fillId="${l}" borderId="0" xfId="0" applyFont="1" applyFill="1"/>`).join('') +
+  XF(3, 0, 0, AL('center', 'center')) + XF(1, 7, 0, AL('center', 'center')) + XF(0, 0, 1, AL('center', 'center')) + XF(0, 0, 1, AL('center', 'center')) + XF(4, 0, 1, AL('center', 'center')) + XF(5, 0, 1, AL('center', 'center')) + XF(0, 0, 1, AL('left', 'bottom', true)) +
+  '</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+const ST = { title: 7, head: 8, dhead: 9, cell: 10, plus: 11, minus: 12, sum: 13 };
 // stil: 1 sarlavha · 2 yashil · 3 qizil · 4 sariq · 5 qalin · 6 qalin+kulrang
 function xlsxBlob(sheets) {
+  const hasF = sheets.some(s => s.rows.some(r => r.some(c => c && typeof c === 'object' && c.f)));
   const sh = sheets.map((s, k) => {
-    const w = s.widths || [];
-    const rows = s.rows.map((r, ri) => `<row r="${ri + 1}">` + r.map((c, ci) => {
+    const w = s.widths || [], rh = s.rowH || {};
+    const rows = s.rows.map((r, ri) => `<row r="${ri + 1}"${rh[ri] ? ` ht="${rh[ri]}" customHeight="1"` : ''}>` + r.map((c, ci) => {
       const o = c && typeof c === 'object' ? c : { v: c }, ref = colL(ci) + (ri + 1), st = ri === 0 && s.head !== false ? 1 : (o.s || 0), a = st ? ` s="${st}"` : '';
+      if (o.f) return `<c r="${ref}"${a} t="str"><f>${X(o.f)}</f><v>${X(o.v == null ? '' : o.v)}</v></c>`;           // formula (+ tayyor natija: formulani hisoblamaydigan dasturlar ham ko'rsatadi)
       if (o.v === '' || o.v == null) return st ? `<c r="${ref}"${a}/>` : '';
       return typeof o.v === 'number' ? `<c r="${ref}"${a}><v>${o.v}</v></c>` : `<c r="${ref}"${a} t="inlineStr"><is><t xml:space="preserve">${X(o.v)}</t></is></c>`;
     }).join('') + '</row>').join('');
     const last = colL(Math.max(0, (s.rows[0] || ['']).length - 1)) + s.rows.length;
-    return H + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"' + (k === 0 ? ' tabSelected="1"' : '') + '>' + (s.head !== false ? '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>' : '') + '</sheetView></sheetViews>' +
-      (w.length ? '<cols>' + w.map((x, i) => `<col min="${i + 1}" max="${i + 1}" width="${x}" customWidth="1"/>`).join('') + '</cols>' : '') + `<sheetData>${rows}</sheetData>` + (s.filter ? `<autoFilter ref="A1:${last}"/>` : '') + '</worksheet>';
+    const fz = s.freeze || (s.head !== false ? { x: 0, y: 1 } : null);
+    const pane = fz && (fz.x || fz.y) ? `<pane${fz.x ? ` xSplit="${fz.x}"` : ''}${fz.y ? ` ySplit="${fz.y}"` : ''} topLeftCell="${colL(fz.x || 0)}${(fz.y || 0) + 1}" activePane="${fz.x && fz.y ? 'bottomRight' : fz.y ? 'bottomLeft' : 'topRight'}" state="frozen"/>` : '';
+    return H + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' + (s.fit ? '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>' : '') +
+      '<sheetViews><sheetView workbookViewId="0"' + (s.grid === false ? ' showGridLines="0"' : '') + (k === 0 ? ' tabSelected="1"' : '') + '>' + pane + '</sheetView></sheetViews>' +
+      (w.length ? '<cols>' + w.map((x, i) => `<col min="${i + 1}" max="${i + 1}" width="${x}" customWidth="1"/>`).join('') + '</cols>' : '') + `<sheetData>${rows}</sheetData>` + (s.filter ? `<autoFilter ref="A1:${last}"/>` : '') +
+      (s.merges && s.merges.length ? `<mergeCells count="${s.merges.length}">${s.merges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : '') +
+      (s.fit ? '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>' : '') + '</worksheet>';
   });
   const files = [
     ['[Content_Types].xml', H + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' + sheets.map((_, k) => `<Override PartName="/xl/worksheets/sheet${k + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('') + '</Types>'],
     ['_rels/.rels', H + `<Relationships xmlns="${NSP}"><Relationship Id="rId1" Type="${NSR}/officeDocument" Target="xl/workbook.xml"/></Relationships>`],
-    ['xl/workbook.xml', H + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="${NSR}"><sheets>` + sheets.map((s, k) => `<sheet name="${X(s.name).slice(0, 31)}" sheetId="${k + 1}" r:id="rId${k + 1}"/>`).join('') + '</sheets></workbook>'],
+    ['xl/workbook.xml', H + `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="${NSR}"><sheets>` + sheets.map((s, k) => `<sheet name="${X(s.name).slice(0, 31)}" sheetId="${k + 1}" r:id="rId${k + 1}"/>`).join('') + '</sheets>' + (hasF ? '<calcPr fullCalcOnLoad="1"/>' : '') + '</workbook>'],
     ['xl/_rels/workbook.xml.rels', H + `<Relationships xmlns="${NSP}">` + sheets.map((_, k) => `<Relationship Id="rId${k + 1}" Type="${NSR}/worksheet" Target="worksheets/sheet${k + 1}.xml"/>`).join('') + `<Relationship Id="rId${sheets.length + 1}" Type="${NSR}/styles" Target="styles.xml"/></Relationships>`],
     ['xl/styles.xml', STYLES], ...sh.map((x, k) => [`xl/worksheets/sheet${k + 1}.xml`, x]),
   ];
@@ -180,6 +195,19 @@ const stName = r => !r ? 'Kelmadi' : r[1] === 'l' ? 'Kech keldi' : 'Keldi';
 const via = r => r ? (r[3] === 'self' ? 'O‘zi belgiladi' : r[3] === 'face' ? 'Yuz ID (qo‘lda)' : r[3] === 'fid' ? 'Yuz ID (avto)' : 'Transmitter') : '';
 const clsT = r => !r ? '' : ({ ok: 'Radius ichida', warn: 'Ogohlantirish', far: 'Uzoqda', noloc: 'Joylashuv yo‘q', na: '—' }[r[9]] || '');
 const whyT = r => r && r[7] ? r[7].split(',').map(k => WHY[k] || k).join('; ') : '';
+// Fayl nomi: «{guruh}-guruh davomat» shablon. {guruh} DOIM Excel'dagi (o'quvchilar ro'yxatidagi) guruh raqamidan olinadi —
+// guruh o'zgarsa (yangi fayl yuklansa, ✏ bilan guruh tahrirlansa) nom ham avtomatik yangilanadi. Foydalanuvchi ✏ bilan nomni o'zgartirsa ham guruh raqami shablonda qoladi.
+const FN_AUTO = '{guruh}-guruh davomat', FN_KEY = 'sc_att_fname';
+const fnGroups = () => [...new Set(D.g.filter(Boolean))].slice(0, 4).join('_');
+let fnTpl = ''; try { fnTpl = localStorage.getItem(FN_KEY) || ''; } catch {}
+const fnClean = t => String(t || '').replace(/[\\/:*?"<>|]+/g, '_').replace(/\.(xlsx|csv)\s*$/i, '').replace(/\s+/g, ' ').trim().slice(0, 80);
+const fileBase = () => fnClean((fnTpl || FN_AUTO).split('{guruh}').join(fnGroups()).replace(/^[-_\s]+/, '')) || 'davomat';
+function fnSet(text) {                                 // foydalanuvchi yozgan nom → shablon (guruh raqami {guruh} bilan almashtiriladi, shunda Excel bilan sinxron qoladi)
+  const g = fnGroups(), t = fnClean(text); let tpl = t;
+  if (g && t.includes(g)) tpl = t.split(g).join('{guruh}');
+  fnTpl = (!t || tpl === FN_AUTO || t === fileBase() && !fnTpl) ? '' : tpl;
+  try { fnTpl ? localStorage.setItem(FN_KEY, fnTpl) : localStorage.removeItem(FN_KEY); } catch {}
+}
 const title = () => (D.title || 'Davomat').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 40);
 const stamp = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 function sheetAll() {
@@ -206,38 +234,81 @@ function sheetFace() {
   [...D.rows.entries()].filter(([, r]) => r[3] === 'face' || r[3] === 'fid').sort((a, b) => a[1][2] - b[1][2]).forEach(([i, r]) => rows.push([D.n[i], D.g[i], D.fm.fid[i] || '', hms(r[2]), { v: stName(r), s: r[1] === 'l' ? 4 : 2 }, via(r), r[12] != null ? r[12] : '', r[8] ? 'Saqlangan' : '—']));
   return { name: 'Yuz ID', rows, widths: [34, 14, 10, 11, 14, 16, 12, 14] };
 }
+// ---------------- STANDART FORMAT (bitta format): sarlavha · «Davomat» bandi · № F.I.Sh Guruh Telefon raqam Face ID Face kod · sana ustunlari (+ / -) · yig'indi ----------------
+// Hamma narsa shu bitta faylda: ro'yxat, Face ID, Face kod va davomat tarixi. Keyingi darsda shu fayl yuklanadi — yangi sana ustuni o'ngga qo'shiladi.
+const STD_HEAD = ['№', 'F.I.Sh', 'Guruh', 'Telefon raqam', 'Face ID', 'Face kod'];
+const mk = (v, s) => ({ v, s });
+const sumText = (st, k) => { let a = 0, b = 0; st.forEach(x => { if (x.v[k] === '+') a++; else if (x.v[k] === '-') b++; }); return `${a} ta keldi\n${b} ta kelmadi`; };
+function rosterSheet(title, st, dates) {
+  const c0 = STD_HEAD.length, nd = dates.length, lastC = c0 + nd, N = st.length;      // lastC — «Sana» (keyingi sana uchun bo'sh) ustuni
+  const rows = [[mk(title, ST.title)], [...STD_HEAD.map(() => mk('', ST.head)), mk('Davomat', ST.head), ...dates.map(() => mk('', ST.head)), mk('', ST.head)],
+    [...STD_HEAD.map(t => mk(t, ST.head)), ...dates.map(d => mk(d, ST.dhead)), mk('Sana', ST.dhead)]];
+  st.forEach((x, i) => rows.push([mk(i + 1, ST.cell), mk(x.n, ST.cell), mk(x.g || '', ST.cell), mk(x.p || '', ST.cell), mk(x.f || '', ST.cell), mk(x.c || '', ST.cell),
+    ...dates.map((_, k) => (x.v[k] === '+' ? mk('+', ST.plus) : x.v[k] === '-' ? mk('-', ST.minus) : mk('', ST.cell))), mk('', ST.cell)]));
+  if (N) {                                                                          // yig'indi qatori: Excelda jonli formula (+ / - o'zgarsa, son ham o'zgaradi)
+    const sum = [...STD_HEAD.map(() => mk('', ST.cell))];
+    for (let k = 0; k <= nd; k++) { const L = colL(c0 + k), rg = `${L}4:${L}${3 + N}`; sum.push({ v: k < nd ? sumText(st, k) : '0 ta keldi\n0 ta kelmadi', s: ST.sum, f: `SUMPRODUCT(--(${rg}="+"))&" ta keldi"&CHAR(10)&SUMPRODUCT(--(${rg}="-"))&" ta kelmadi"` }); }
+    rows.push(sum);
+  }
+  const rowH = { 0: 36, 1: 24, 2: 28 }; for (let i = 0; i < N; i++) rowH[3 + i] = 24; if (N) rowH[3 + N] = 38;
+  return { name: 'O\'quvchilar', rows, head: false, grid: false, fit: true, freeze: { x: 2, y: 3 }, rowH, widths: [6, 32, 12, 20, 12, 16, ...dates.map(() => 14), 14],
+    merges: ['A1:' + colL(lastC) + '1', ...(lastC > c0 ? ['G2:' + colL(lastC) + '2'] : [])] };
+}
+function rosterCsvRows(title, st, dates) {
+  const rows = [[title], ['', '', '', '', '', '', 'Davomat'], [...STD_HEAD, ...dates, 'Sana']];
+  st.forEach((x, i) => rows.push([i + 1, x.n, x.g || '', x.p || '', x.f || '', x.c || '', ...dates.map((_, k) => (x.v[k] === '+' || x.v[k] === '-' ? x.v[k] : '')), '']));
+  if (st.length) rows.push(['', '', '', '', '', '', ...dates.map((_, k) => sumText(st, k)), '0 ta keldi\n0 ta kelmadi']);
+  return rows;
+}
+// Sarlavha: «122-guruh ma’lumotlari». Nom yozilmagan bo'lsa va hamma bitta guruhda bo'lsa — guruh nomi olinadi
+function rosterTitle() {
+  let t = (D.title || '').trim();
+  const gs = [...new Set(D.g.filter(Boolean))], auto = !t || /^\d+\s*[-_]?\s*guruh$/i.test(t);        // sarlavha «122-guruh» ko'rinishida bo'lsa — u avtomatik: guruh ustuniga ergashadi
+  if (auto) t = gs.length === 1 ? (/^\d+$/.test(gs[0]) ? gs[0] + '-guruh' : gs[0]) : gs.length > 1 && gs.every(g => /^\d+$/.test(g)) ? gs.slice(0, 4).join('_') + '-guruh' : t || 'Guruh';
+  return t + ' ma’lumotlari';
+}
+// Tarix: faylda bor sanalar + (bugun kimdir belgilangan bo'lsa) bugungi sana ustuni: kelgan «+», kelmagan «-» (kech kelgan ham «+»). Bugungi ustun bor bo'lsa — qayta yoziladi.
+function histNow() {
+  const dates = (D.fm.dates || []).slice();
+  let v = D.n.map((_, i) => String(D.fm.pv[i] || '').padEnd(dates.length, '.'));
+  if (D.rows.size) {
+    const today = todayStr(); let k = dates.indexOf(today); if (k < 0) { dates.push(today); k = dates.length - 1; }
+    v = v.map((x, i) => { const a = x.padEnd(dates.length, '.').split(''); a[k] = D.rows.has(i) ? '+' : '-'; return a.join(''); });
+  }
+  return { dates, v };
+}
+async function rosterData() {
+  const r = await fetch(`/api/rooms/${S.code}/att/faces?key=${encodeURIComponent(S.key)}`); if (!r.ok) throw new Error('server');
+  const j = await r.json(), h = histNow();
+  return { title: rosterTitle(), dates: h.dates, st: D.n.map((n, i) => ({ n, g: D.g[i] || '', p: D.fm.ph[i] || '', f: D.fm.fid[i] || '', c: ((j.faces || [])[i] || []).join('|'), v: h.v[i] })) };
+}
 const need = () => { if (!D.n.length) { toast('Avval o‘quvchilar ro‘yxatini yuklang'); return false; } return true; };
 const dl = {
   full: () => need() && save(xlsxBlob([sheetAll(), sheetStat(), sheetWarn(), sheetFace()]), `davomat-${title()}-${stamp()}.xlsx`),
   absent: () => { if (!need()) return; const rows = [['№', 'F.I.Sh', 'Guruh']]; D.n.forEach((n, i) => { if (!D.rows.has(i)) rows.push([rows.length, n, D.g[i]]); }); save(csvBlob(rows), `kelmaganlar-${title()}-${stamp()}.csv`); },
   warn: () => need() && save(xlsxBlob([sheetWarn()]), `uzoqdagilar-${title()}-${stamp()}.xlsx`),
   face: () => need() && save(xlsxBlob([sheetFace()]), `yuz-id-${title()}-${stamp()}.xlsx`),
-  roster: async () => {                                  // Ism, telefon, guruh, davomat tarixi, Face ID va yuz kodlari — keyingi safar shu faylni yuklash kifoya
+  roster: async fmt => {                                 // Yagona fayl: ism, guruh, telefon, Face ID, Face kod, davomat tarixi (sana ustunlari) — keyingi safar shu faylni yuklash kifoya
     if (!need()) return;
     try {
-      const r = await fetch(`/api/rooms/${S.code}/att/faces?key=${encodeURIComponent(S.key)}`), j = await r.json(), d = new Date(), dd = `${pad(d.getDate())}.${pad(d.getMonth() + 1)}`;
-      const rows = [['№', 'F.I.Sh', 'Telefon', 'Guruh', 'Davomat', 'Face ID', 'Face kod']];
-      D.n.forEach((n, i) => {
-        const r0 = D.rows.get(i); let h = (D.fm.pv[i] || '').split(' ').filter(x => x && !x.startsWith(dd + ':')).join(' ');
-        if (D.rows.size) h = (h ? h + ' ' : '') + dd + ':' + (!r0 ? '-' : r0[1] === 'l' ? 'kech' : '+');
-        rows.push([i + 1, n, D.fm.ph[i] || '', D.g[i], h, D.fm.fid[i] || '', ((j.faces || [])[i] || []).join('|')]);
-      });
-      save(xlsxBlob([{ name: 'O\'quvchilar', rows, widths: [6, 34, 18, 14, 44, 10, 28], filter: true }]), `oquvchilar-face-id-${title()}-${stamp()}.xlsx`);
-      D.svN = D.n.length; D.svF = D.cfg.faceN || 0; D.svM = D.rows.size; paintHost();
-      toast('💾 Saqlandi. Keyingi safar shu faylni yuklasangiz, yuzlarni qayta kiritish shart emas', 6000);
+      const d = await rosterData(), csv = fmt === 'csv';
+      save(csv ? csvBlob(rosterCsvRows(d.title, d.st, d.dates)) : xlsxBlob([rosterSheet(d.title, d.st, d.dates)]), `${fileBase()}.${csv ? 'csv' : 'xlsx'}`);
+      D.svN = D.n.length; D.svF = D.cfg.faceN || 0; D.svM = D.rows.size; D.edited = false; paintHost();
+      toast('💾 Saqlandi: ' + fileBase() + '.' + (csv ? 'csv' : 'xlsx') + '.  Keyingi safar shu faylni yuklasangiz, yuzlarni qayta kiritish shart emas' + (D.rows.size ? ` · 📅 ${d.dates[d.dates.length - 1]} ustuni qo‘shildi` : ''), 6000);
     } catch { toast('Saqlab bo‘lmadi', 4000); }
   },
   csv: () => { if (!need()) return; const a = sheetAll().rows.map(r => r.map(c => (c && typeof c === 'object' ? c.v : c))); save(csvBlob(a), `davomat-${title()}-${stamp()}.csv`); },
 };
-function templates(kind) {
-  const ex = [['1', 'Valiyev Ali', '9-A', '+998901234567', '', '', ''], ['2', 'Karimova Gulnora', '9-A', '', '', '', ''], ['3', 'Tursunov Sardor', '9-B', '', '', '', '']], hd = ['№', 'F.I.Sh', 'Guruh', 'Telefon', 'Davomat', 'Face ID', 'Face kod'];
-  if (kind === 'csv') return save(csvBlob([hd, ...ex]), 'oquvchilar-shablon.csv');
-  save(xlsxBlob([{ name: 'O\'quvchilar', rows: [hd, ...ex.map(r => [Number(r[0]), r[1], r[2], r[3], r[4], r[5], r[6]])], widths: [6, 34, 14, 20, 30, 10, 28] }]), 'oquvchilar-shablon.xlsx');
+function templates(kind) {                              // Shablon = standart format (namunadagi kabi): 3 ta o'quvchi, 3 ta sana
+  const st = [{ n: 'Valiyev Ali', g: '122', p: '+998901234567', f: 'F0001', c: '', v: '++-' }, { n: 'Karimova Gulnora', g: '122', p: '998901234267', f: 'F0002', c: '', v: '--+' }, { n: 'Tursunov Sardor', g: '122', p: '', f: '', c: '', v: '--+' }];
+  const dates = ['07.09.2026', '09.09.2026', '11.09.2026'], t = '122-guruh ma’lumotlari';
+  if (kind === 'csv') return save(csvBlob(rosterCsvRows(t, st, dates)), 'oquvchilar-shablon.csv');
+  save(xlsxBlob([rosterSheet(t, st, dates)]), 'oquvchilar-shablon.xlsx');
 }
 
 // ---------------- Ro'yxatni o'qish: Excel / CSV / Word ----------------
 function csvRows(text) {
-  const first = text.split(/\r?\n/, 1)[0], delim = [';', '\t', ','].map(d => [d, first.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];
+  const smp = text.split(/\r?\n/, 8).join('\n'), delim = [';', '\t', ','].map(d => [d, smp.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];   // sarlavha qatorida vergul bo'lishi mumkin — birinchi bir necha qator bo'yicha aniqlanadi
   const rows = []; let row = [], cur = '', q = false;
   for (let i = 0; i < text.length; i++) { const c = text[i];
     if (q) { if (c === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
@@ -251,36 +322,70 @@ async function docxRows(f) {
   if (trs.length) { for (const tr of trs) rows.push([...tr.getElementsByTagNameNS(W, 'tc')].map(txt)); return rows; }
   for (const p of d.getElementsByTagNameNS(W, 'p')) { const t = txt(p).trim(); if (t) rows.push([t]); } return rows;
 }
+// Sana katagi: 07.09.2026 · 7.9.26 · 07.09 (yil — joriy) · 2026-09-07 · Excel sana raqami (46272) → «dd.mm.yyyy»; sana bo'lmasa ''
+function normDate(t) {
+  t = String(t == null ? '' : t).trim(); let m, d, mo, y;
+  if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t))) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+  else if ((m = /^(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?$/.exec(t))) { d = +m[1]; mo = +m[2]; y = m[3] ? +m[3] : new Date().getFullYear(); if (y < 100) y += 2000; }
+  else if (/^\d{5}(\.\d+)?$/.test(t) && +t >= 36526 && +t <= 73050) { const dt = new Date(Math.round((+t - 25569) * 86400000)); d = dt.getUTCDate(); mo = dt.getUTCMonth() + 1; y = dt.getUTCFullYear(); }
+  else return '';
+  if (mo < 1 || mo > 12 || d < 1 || y < 2000 || y > 2100 || d > new Date(y, mo, 0).getDate()) return '';   // 31.02 kabi mavjud bo'lmagan sana — sana emas
+  return `${pad(d)}.${pad(mo)}.${y}`;
+}
+const markOf = t => { t = String(t == null ? '' : t).trim().toLowerCase(); if (!t) return '.'; if (/^[+✓✔]|^kech|^keldi/.test(t)) return '+'; if (/^[-–—−]|^kelmadi/.test(t)) return '-'; return '.'; };
+const NAME_H = /f\.?\s?i\.?\s?o?\.?\s?sh|^ism|familiya|name|o.quvchi|talaba|fio|фио|имя/;
+const NAME_X = /^(f\.?\s?i\.?\s?o?\.?\s?sh\.?|ism|familiya(\s*(va|,)?\s*ism)?|ism\s*familiya|full\s*name|name|fio|фио|имя|o.quvchi(lar)?|talaba(lar)?)$/;   // butun katak sarlavha so'zi
+// Fayl → { students: [{n,g,p,f,c,v}], dates: ['dd.mm.yyyy'…], title, legacy }. v — har bir sana uchun bitta belgi: '+' keldi · '-' kelmadi · '.' bo'sh.
+// Standart format (sarlavha + «Davomat» bandi + ustunlar + sana ustunlari), eski format (bitta «Davomat» ustunida «03.11:+ 04.11:-») va sarlavhasiz ro'yxat o'qiladi.
 function toStudents(rows) {
-  rows = rows.filter(r => r && r.some(c => String(c || '').trim()));
-  if (!rows.length) return [];
-  const lc = rows[0].map(x => String(x || '').toLowerCase());
-  let ni = lc.findIndex(c => /f\.?\s?i\.?\s?o?\.?\s?sh|^ism|familiya|name|o.quvchi|talaba|fio|фио|имя/.test(c)), gi = lc.findIndex(c => /guruh|group|sinf|kurs|груп/.test(c)), start = 0,
-    col = re => (rows[0] ? lc.findIndex(c => re.test(c)) : -1), pi = col(/telefon|tel\b|raqam|phone|тел/), vi = col(/davomat|attendance|посещ/), fi = col(/face\s*id|yuz\s*id|^fid$/), ci = col(/face\s*(kod|code)|yuz\s*kod/);
-  if (ni >= 0) start = 1;
-  else { const smp = rows.slice(0, 6); const w = Math.max(...rows.slice(0, 6).map(r => r.length)); let best = -1, sc = -1;
-    for (let c = 0; c < w; c++) { const s = smp.filter(r => /[A-Za-z\u0400-\u04ff]{3,}/.test(String(r[c] || '')) && !/^\d/.test(String(r[c] || '').trim()) || /^\d+[.)]\s*[A-Za-z\u0400-\u04ff]/.test(String(r[c] || ''))).length; if (s > sc) { sc = s; best = c; } } ni = Math.max(0, best); }
-  const out = [];
-  for (let k = start; k < rows.length; k++) {
-    const r = rows[k], n = String(r[ni] || '').replace(/^\s*\d+\s*[.)\-]\s*/, '').replace(/\s+/g, ' ').trim();
-    if (n.length < 3 || /^[\d\s.,+\-]+$/.test(n)) continue;
-    const cell = c => (c >= 0 && r[c] != null ? String(r[c]).trim() : '');
-    out.push({ n: n.slice(0, 60), g: cell(gi).slice(0, 30), p: cell(pi).slice(0, 24), v: cell(vi), f: cell(fi).slice(0, 16), c: cell(ci) });
+  const cellT = c => String(c == null ? '' : c).replace(/\u00a0/g, ' ').trim();
+  rows = rows.filter(r => r && r.some(c => cellT(c)));
+  const res = { students: [], dates: [], title: '', legacy: false };
+  if (!rows.length) return res;
+  const lc = r => r.map(x => cellT(x).toLowerCase());
+  let h = -1;                                               // sarlavha qatori: F.I.Sh ustuni bor (sarlavha/«Davomat» bandi qatorlari tashlab o'tiladi)
+  for (let r = 0; r < Math.min(rows.length, 12) && h < 0; r++) { const l = lc(rows[r]); const ne = l.filter(Boolean).length; if (l.some(c => c && c.length <= 30 && NAME_X.test(c)) || (ne >= 2 && l.some(c => c && c.length <= 30 && NAME_H.test(c))) || (r === 0 && ne === 1 && l.some(c => c && c.length <= 14 && NAME_H.test(c)))) h = r; }
+  let ni = -1, gi = -1, pi = -1, vi = -1, fi = -1, ci = -1, start = 0; const dcols = [];
+  if (h >= 0) {
+    const L = lc(rows[h]), find = re => L.findIndex(c => c && re.test(c));
+    ni = L.findIndex(c => c && c.length <= 30 && (NAME_X.test(c) || NAME_H.test(c)));
+    gi = find(/guruh|group|sinf|kurs|груп/); pi = find(/telefon|tel\b|raqam|phone|тел/); vi = find(/davomat|attendance|посещ/); fi = find(/face\s*id|yuz\s*id|^fid$/); ci = find(/face\s*(kod|code)|yuz\s*kod/);
+    start = h + 1;
+    const used = new Set([ni, gi, pi, vi, fi, ci]);
+    rows[h].forEach((c, k) => { if (used.has(k)) return; const d = normDate(cellT(c)); if (d && !dcols.some(x => x.d === d)) dcols.push({ k, d }); });
+    for (let r = 0; r < h && !res.title; r++) { const t = rows[r].map(cellT).filter(Boolean); if (t.length === 1 && !/^davomat$/i.test(t[0])) res.title = t[0].replace(/\s*ma.{0,2}lumotlari\s*$/i, '').slice(0, 80); }   // «122-guruh ma’lumotlari» → «122-guruh»
+  } else {
+    const smp = rows.slice(0, 6), w = Math.max(...smp.map(r => r.length)); let best = -1, sc = -1;
+    for (let c = 0; c < w; c++) { const n = smp.filter(r => /[A-Za-z\u0400-\u04ff]{3,}/.test(String(r[c] || '')) && !/^\d/.test(String(r[c] || '').trim()) || /^\d+[.)]\s*[A-Za-z\u0400-\u04ff]/.test(String(r[c] || ''))).length; if (n > sc) { sc = n; best = c; } }
+    ni = Math.max(0, best);
   }
-  return out;
+  const pre = [], oldDates = [];
+  for (let k = start; k < rows.length; k++) {
+    const r = rows[k], n = cellT(r[ni]).replace(/^\s*\d+\s*[.)\-]\s*/, '').replace(/\s+/g, ' ').trim();
+    if (n.length < 3 || /^[\d\s.,+\-]+$/.test(n)) continue;           // F.I.Sh yo'q qatorlar (yig'indi qatori, bo'sh qatorlar) o'tkazib yuboriladi
+    const cell = c => (c >= 0 && r[c] != null ? cellT(r[c]) : ''), marks = new Map();
+    dcols.forEach(({ k: c, d }) => { const m = markOf(r[c]); if (m !== '.') marks.set(d, m); });
+    const lv = cell(vi);
+    if (lv) for (const m of lv.matchAll(/(\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?)\s*:\s*(\+|-|[–—−]|kech\w*)/gi)) { const d = normDate(m[1]); if (d) { marks.set(d, /^[+k]/i.test(m[2]) ? '+' : '-'); if (!oldDates.includes(d)) oldDates.push(d); } }   // eski format
+    pre.push({ n: n.slice(0, 60), g: cell(gi).slice(0, 30), p: cell(pi).slice(0, 24), f: cell(fi).slice(0, 16), c: cell(ci), marks });
+  }
+  res.dates = dcols.map(x => x.d); oldDates.forEach(d => { if (!res.dates.includes(d)) res.dates.push(d); }); res.legacy = oldDates.length > 0;
+  res.students = pre.map(x => ({ n: x.n, g: x.g, p: x.p, f: x.f, c: x.c, v: res.dates.map(d => x.marks.get(d) || '.').join('') }));
+  return res;
 }
 async function loadFile(f) {
   const err = $('#atErr'); err.hidden = true;
   try {
     const ext = (f.name.split('.').pop() || '').toLowerCase();
     const rows = ext === 'xlsx' ? (await xlsxToRows(f)).map(r => Array.from(r)) : ext === 'docx' ? await docxRows(f) : csvRows(await f.text());
-    const students = toStudents(rows);
+    const parsed = toStudents(rows), students = parsed.students;
     if (!students.length) throw new Error('empty');
     $('#atInfo').textContent = `Yuklanmoqda: ${students.length} ta…`;
-    const r = await fetch(`/api/rooms/${S.code}/att/load?key=${encodeURIComponent(S.key)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: $('#atTitle').value, students }) });
+    const r = await fetch(`/api/rooms/${S.code}/att/load?key=${encodeURIComponent(S.key)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: parsed.title || $('#atTitle').value, students, dates: parsed.dates }) });
     const j = await r.json(); if (!r.ok) throw new Error(j.error || 'server');
     D.tpl = f; paintTpl(); D.svN = j.count; D.svF = j.faces || 0; D.svM = 0; showPane(j.faces < j.count ? 'face' : 'live');
-    toast(`✅ ${j.count} ta o‘quvchi yuklandi` + (j.faces ? ` · 🙂 ${j.faces} tasining Face ID si bor` : '') + (j.badFaces ? ` · ⚠ ${j.badFaces} ta yuz kodi buzilgan` : ''), 5000);
+    const hasToday = parsed.dates.includes(todayStr());
+    toast(`✅ ${j.count} ta o‘quvchi yuklandi` + (j.faces ? ` · 🙂 ${j.faces} tasining Face ID si bor` : '') + (j.dates ? ` · 📅 ${j.dates} ta sana` : '') + (j.badFaces ? ` · ⚠ ${j.badFaces} ta yuz kodi buzilgan` : '') + (hasToday ? ' · ⚠ bugungi sana ustuni faylda bor — saqlaganda u shu darsdagi belgilar bilan qayta yoziladi' : ''), hasToday ? 9000 : 5000);
   } catch (e) {
     err.hidden = false;
     err.textContent = e.message === 'nodecomp' ? 'Bu brauzer .xlsx/.docx ni o‘qiy olmaydi. CSV yuklang.' : e.message === 'empty' ? 'F.I.Sh ustuni topilmadi. Shablondan foydalaning (⬇ tugma).' : 'Faylni o‘qib bo‘lmadi. Shablondan foydalaning (⬇ tugma).';
@@ -332,7 +437,7 @@ function planFill(grid) {                                   // grid[qator][ustun
     if ((!h || DATE_H.test(h) || KEY_H.test(h)) && marks.every(([r]) => !String(grid[r][c] || '').trim())) col = c;
   }
   const newCol = col < 0; if (newCol) col = maxC + 1;
-  const hh = hdr >= 0 && !String(grid[hdr][col] || '').trim() ? todayStr() : null;
+  const hh = hdr >= 0 && (!String(grid[hdr][col] || '').trim() || /^\s*sana\s*$/i.test(String(grid[hdr][col]))) ? todayStr() : null;   // bo'sh yoki «Sana» (standart formatdagi keyingi sana ustuni) → bugungi sana
   return { nameCol, col, newCol, hdr, hh, marks, plus, minus, unk };
 }
 // ZIP: faqat o'zgargan yozuvlar almashtiriladi, qolganlari (rasm, uslub, formulalar…) asl holida ko'chiriladi
@@ -490,7 +595,7 @@ function buildHost() {
   const root = $('#tabAtt'); if (!root) return;
   root.dataset.p = 'list';
   root.innerHTML = `
-  <div class="att-nav" id="atNav"><button data-p="list" class="on"><span>👥</span>Ro‘yxat</button><button data-p="live"><span>📊</span>Jonli</button><button data-p="face"><span>🙂</span>Yuz ID</button><button data-p="set"><span>⚙</span>Sozlama</button><button data-p="rep"><span>💾</span>Fayl</button></div>
+  <div class="att-nav" id="atNav"><button data-p="list" class="on"><span>👥</span>Ro‘yxat</button><button data-p="live"><span>📊</span>Jonli</button><button data-p="face"><span>🙂</span>Yuz ID</button><button data-p="set"><span>⚙</span>Sozlama</button><button data-p="tah"><span>📈</span>Tahlil</button><button data-p="rep"><span>💾</span>Fayl</button></div>
   <div class="att-save" id="atSave" hidden><span>⚠ Saqlanmagan o‘zgarishlar bor</span><button class="primary" id="atSaveBtn">💾 Faylga saqlash</button></div>
 
   <div class="card att-card att-pane" data-pane="list"><h2>👥 O‘quvchilar ro‘yxati</h2>
@@ -505,8 +610,16 @@ function buildHost() {
       <li><b>Ro‘yxat:</b> Excel faylni yuklang (yoki ro‘yxatsiz boshlang). <i>Bitta fayl</i> hamma narsani saqlaydi: ism, guruh, telefon, Face ID kodi, kelgan/kelmaganlar.</li>
       <li><b>Yuz ID:</b> yuzni bir marta kiritish — o‘quvchi <i>o‘z telefonidan</i> yoki siz o‘zingizning qurilmangizdan.</li>
       <li><b>Jonli:</b> davomatni oching. Receiver kod bilan kiradi → <i>joylashuv</i> → <i>yuz</i> → ism-familiya avtomatik chiqadi → faqat tasdiqlaydi.</li>
-      <li><b>Fayl:</b> darsdan keyin bitta Excelga saqlang. Keyingi darsda shu faylni yuklang — yuzlarni qayta kiritish shart emas.</li></ol></details>
+      <li><b>Fayl:</b> darsdan keyin bitta Excelga saqlang: har dars uchun yangi <i>sana ustuni</i> qo‘shiladi (kelgan «+», kelmagan «-»). Keyingi darsda shu faylni yuklang — yuzlarni qayta kiritish shart emas.</li></ol></details>
+    <div class="att-reset"><button class="sec danger" id="atReset">🗑 Davomatni qaytadan boshlash</button><small class="muted">Barcha o‘quvchilar, Face ID kodlari va belgilar tizimdan o‘chadi (sozlamalar qoladi). Avval «💾 Fayl» bo‘limida saqlab oling.</small></div>
   </div>
+
+  <div class="card att-pane" id="atMng" data-pane="list" hidden><h2>🧑‍🎓 O‘quvchilar <span class="mgcnt" id="mgN"></span></h2>
+    <p class="muted">✏ — ism, guruh, telefon, Face ID va Face kodni o‘zgartirish · ✕ — ro‘yxatdan chiqarish</p>
+    <input id="mgQ" placeholder="Ism bo‘yicha qidirish…" autocomplete="off"><div id="mgRows" class="att-rows"></div><button class="sec wide" id="mgMore" hidden>Yana ko‘rsatish</button></div>
+
+  <div class="card att-pane" id="atTah" data-pane="tah"><h2>📈 Davomat tahlili</h2>
+    <p class="muted" id="thInfo"></p><div class="th-dates" id="thDates"></div><div id="thDet"></div></div>
 
   <div class="card att-pane att-ctl" id="atCtl" data-pane="live" hidden>
     ${sw('atOpen', '🟢 Davomat ochiq', 'Yoqilganda receiverlar belgilay oladi')}${sw('atFaceOn', '🙂 Yuz ID rejimi', 'Receiver yuzini skanerlaydi — ism avtomatik chiqadi, o‘zi faqat tasdiqlaydi')}
@@ -546,8 +659,12 @@ function buildHost() {
     <p class="muted" id="atCenInfo"></p></div>
 
   <div class="card att-pane" id="atRep" data-pane="rep" hidden><h2>💾 Yagona fayl</h2>
-    <p class="muted">Bitta Excel hamma narsani saqlaydi: <b>F.I.Sh · telefon · guruh · Face ID kodi · davomat tarixi</b> (kelgan «+», kelmagan «-»). Keyingi darsda shu faylni «Ro‘yxat» bo‘limida yuklang — yuzlarni qayta kiritish shart emas.</p>
-    <button class="primary wide big" id="dlRoster">💾 Yagona fayl (Excel) — saqlash</button>
+    <p class="muted">Bitta fayl hamma narsani saqlaydi: <b>№ · F.I.Sh · Guruh · Telefon raqam · Face ID · Face kod</b> va har dars uchun <b>sana ustuni</b> (kelgan «+», kelmagan «-», pastda «n ta keldi / m ta kelmadi»). Keyingi darsda shu faylni «Ro‘yxat» bo‘limida yuklang — yuzlarni qayta kiritish shart emas.</p>
+    <div class="att-fn" id="atFn"><span class="att-fn-l">📄 Fayl nomi</span>
+      <div class="att-fn-v" id="atFnView"><b id="atFnTxt"></b><em id="atFnExt">.xlsx</em><button type="button" class="att-fn-ed" id="atFnEdit" title="Fayl nomini o‘zgartirish" aria-label="Fayl nomini o‘zgartirish">✏️</button></div>
+      <div class="att-fn-v" id="atFnForm" hidden><input id="atFnIn" maxlength="80" autocomplete="off" spellcheck="false" aria-label="Fayl nomi"><button type="button" class="att-fn-ok" id="atFnOk" title="Saqlash">✓</button><button type="button" class="att-fn-x" id="atFnNo" title="Bekor qilish">✕</button></div>
+      <small class="muted" id="atFnHint"></small><button type="button" class="link" id="atFnAuto" hidden>↺ Avtomatik nomga qaytarish</button></div>
+    <button class="primary wide big" id="dlRoster">💾 Yagona fayl (Excel) — saqlash</button><button class="sec wide" id="dlRosterCsv" style="margin-top:8px">⬇ Shu fayl CSV ko‘rinishida</button>
     <h3>Boshqa hisobotlar</h3>
     <div class="att-row att-dl"><button class="sec" id="dlFull">⬇ To‘liq hisobot (Excel)</button><button class="sec" id="dlAbs">⬇ Kelmaganlar (CSV)</button><button class="sec" id="dlWarn">⚠ Uzoqdagilar (Excel)</button><button class="sec" id="dlFace">🙂 Yuz ID (Excel)</button><button class="sec" id="dlCsv">⬇ Hammasi (CSV)</button></div>
     <div class="att-tpl"><h3>📄 O‘z shablon faylingiz bo‘yicha</h3><p class="muted">Excel / CSV / Word faylingizni tanlang — undagi ismlar yonida kelganlarga <b>+</b>, kelmaganlarga <b>-</b> yoziladi. Fayl asl ko‘rinishida (jadval, ranglar) yuklab olinadi.</p>
@@ -577,7 +694,18 @@ function buildHost() {
   on('atCenX', 'click', () => send({ type: 'att-cfg', cfg: { center: null } }));
   on('atCenD', 'click', () => { send({ type: 'att-cfg', cfg: { center: 'default' } }); toast('📍 Standart lokatsiyaga qaytarildi'); });
   on('atClear', 'click', () => { if (confirm('Barcha belgilar o‘chiriladi (ro‘yxat qoladi). Davom etasizmi?')) send({ type: 'att-clear' }); });
-  on('dlFull', 'click', dl.full); on('dlAbs', 'click', dl.absent); on('dlWarn', 'click', dl.warn); on('dlFace', 'click', dl.face); on('dlRoster', 'click', dl.roster); on('dlCsv', 'click', dl.csv); on('atSaveBtn', 'click', dl.roster);
+  on('atReset', 'click', () => {                           // 🗑 hammasini boshidan: o'quvchilar, Face ID, tarix va belgilar tizimdan o'chadi
+    if (!D.n.length && !D.rows.size) return toast('Tizimda o‘quvchi yo‘q — o‘chiriladigan narsa yo‘q', 3500);
+    const warn = unsaved() ? '\n\n⚠ SAQLANMAGAN o‘zgarishlar bor! Avval «💾 Fayl» bo‘limida faylga saqlab oling.' : '';
+    if (confirm(`Davomat qaytadan boshlanadi.\n\n${D.n.length} ta o‘quvchi, ularning Face ID kodlari, davomat tarixi va hozirgi belgilar tizimdan o‘chiriladi. Bu amalni qaytarib bo‘lmaydi.${warn}\n\nDavom etasizmi?`)) send({ type: 'att-reset' });
+  });
+  const fnOpen = () => { $('#atFnIn').value = fileBase(); $('#atFnView').hidden = true; $('#atFnForm').hidden = false; $('#atFnIn').focus(); $('#atFnIn').select(); };
+  const fnClose = () => { $('#atFnForm').hidden = true; $('#atFnView').hidden = false; paintFn(); };
+  on('atFnEdit', 'click', fnOpen); on('atFnNo', 'click', fnClose);
+  on('atFnOk', 'click', () => { fnSet($('#atFnIn').value); fnClose(); toast('✏️ Fayl nomi: ' + fileBase(), 3000); });
+  on('atFnIn', 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#atFnOk').click(); } else if (e.key === 'Escape') fnClose(); });
+  on('atFnAuto', 'click', () => { fnSet(''); fnClose(); toast('↺ Avtomatik nom: ' + fileBase(), 3000); });
+  on('dlFull', 'click', dl.full); on('dlAbs', 'click', dl.absent); on('dlWarn', 'click', dl.warn); on('dlFace', 'click', dl.face); on('dlRoster', 'click', () => dl.roster('xlsx')); on('dlRosterCsv', 'click', () => dl.roster('csv')); on('dlCsv', 'click', dl.csv); on('atSaveBtn', 'click', () => dl.roster('xlsx'));
   on('atQ', 'input', () => { D.q = $('#atQ').value; D.shown = 120; paintList(); });
   on('atMore', 'click', () => { D.shown += 200; paintList(); });
   on('afAdd', 'click', () => { const n = $('#afNn').value.replace(/\s+/g, ' ').trim(); if (n.split(' ').filter(w => w.length >= 2).length < 2) return toast('Familiya va ismni to‘liq yozing', 3500); send({ type: 'att-add', n, g: $('#afNg').value.trim(), p: $('#afNp').value.trim() }); });
@@ -586,10 +714,19 @@ function buildHost() {
     const b = e.target.closest('button[data-a]'); if (b) { const i = Number(b.dataset.i); send({ type: 'att-mark', sid: i, on: b.dataset.a === 'on', via: 'host' }); return; }
     const im = e.target.closest('img[data-i]'); if (im) lightbox(im.dataset.i);
   };
+  { let tq; $('#mgQ').addEventListener('input', () => { clearTimeout(tq); tq = setTimeout(() => { D.mshown = 60; paintMng(); }, 120); }); }
+  on('mgMore', 'click', () => { D.mshown += 120; paintMng(); });
+  $('#mgRows').onclick = e => {
+    const b = e.target.closest('button[data-a]'); if (!b) return; const i = Number(b.dataset.i);
+    if (b.dataset.a === 'edit') return openEdit(i);
+    if (confirm(`«${D.n[i]}» ro‘yxatdan chiqarilsinmi?\n\nUning Face ID kodi va davomat tarixi ham o‘chadi.${unsaved() ? '\n\n⚠ Saqlanmagan o‘zgarishlar bor — avval faylga saqlab olishingiz mumkin.' : ''}`)) send({ type: 'att-del', sid: i });
+  };
+  $('#thDates').onclick = e => { const b = e.target.closest('button[data-d]'); if (b) { D.thSel = b.dataset.d; paintTah(); } };
+  $('#thDet').onclick = e => { const b = e.target.closest('button[data-cp]'); if (!b) return; const t = b.dataset.cp === 'out' ? thNames('-') : thNames('+'); navigator.clipboard.writeText(t.join('\n')).then(() => toast('📋 Nusxalandi: ' + t.length + ' ta ism', 2500), () => toast('Nusxalab bo‘lmadi', 3000)); };
   buildFace();
 }
-const showPane = p => { if (!P.root) return; P.root.dataset.p = p; P.root.querySelectorAll('#atNav button').forEach(b => b.classList.toggle('on', b.dataset.p === p)); if (p !== 'face' && fStream && !kOn) faceOff(); };
-const unsaved = () => isHost() && D.n.length > 0 && (D.n.length > (D.svN || 0) || (D.cfg.faceN || 0) > (D.svF || 0) || D.rows.size > (D.svM || 0));
+const showPane = p => { if (!P.root) return; P.root.dataset.p = p; if (p === 'list') paintMng(); if (p === 'tah') paintTah(); P.root.querySelectorAll('#atNav button').forEach(b => b.classList.toggle('on', b.dataset.p === p)); if (p !== 'face' && fStream && !kOn) faceOff(); };
+const unsaved = () => isHost() && D.n.length > 0 && (D.n.length > (D.svN || 0) || (D.cfg.faceN || 0) > (D.svF || 0) || D.rows.size > (D.svM || 0) || D.edited);
 window.addEventListener('beforeunload', e => { if (unsaved()) { e.preventDefault(); e.returnValue = ''; } });
 // Davomat ochilganda markaz belgilanmagan bo'lsa — Transmitter qurilmasining GPS'i bilan avtomatik belgilanadi (aniqligi yetarli bo'lsa)
 async function autoCenter() {
@@ -854,6 +991,13 @@ function paintList() {
   }).join('') || '<p class="muted center">Hech narsa topilmadi</p>';
   $('#atMore').hidden = idx.length <= D.shown;
 }
+function paintFn() {                                   // fayl nomi ko'rsatkichi (guruh o'zgarsa darhol yangilanadi)
+  const t = $('#atFnTxt'); if (!t) return;
+  t.textContent = fileBase();
+  const hint = $('#atFnHint'), g = fnGroups();
+  hint.textContent = fnTpl ? `✏️ Nom o‘zgartirilgan. Guruh raqami${g ? ' (' + g + ')' : ''} Excel’dagi bilan sinxron qoladi.` : `Guruh raqami${g ? ' (' + g + ')' : ''} Excel’dagi bilan avtomatik sinxron.`;
+  $('#atFnAuto').hidden = !fnTpl;
+}
 function paintHost() {
   if (!P.root || !isHost()) return;
   const has = true, c = D.cfg,   // bo'limlar har doim ko'rinadi: A (o'zi ro'yxatdan o'tish) o'chsa ham B va C qoladi
@@ -884,7 +1028,57 @@ function paintHost() {
     $('#atCode').innerHTML = S.code ? `Receiverlar xona kodi bilan kiradi: <b>${esc(S.code)}</b>` : '';
     $('#atSave').hidden = !unsaved();
   }
-  paintList();
+  paintFn(); paintList(); paintMng(); paintTah();
+}
+
+// ---------------- 🧑‍🎓 O'quvchilarni boshqarish: ✏ tahrirlash · ✕ chiqarish ----------------
+function paintMng() {
+  const box = $('#mgRows'); if (!box || !P.root || P.root.dataset.p !== 'list') return;
+  const card = $('#atMng'); card.hidden = !D.n.length; if (!D.n.length) return;
+  const q = $('#mgQ').value.trim(), ids = q ? search(q, 500) : D.n.map((_, i) => i), shown = ids.slice(0, D.mshown || 60);
+  $('#mgN').textContent = D.n.length;
+  box.innerHTML = shown.map(i => `<div class="att-r mgr"><div class="nm"><b>${esc(D.n[i])}</b><small>${esc(D.g[i] || '—')} · ${esc(D.fm.ph[i] || 'telefonsiz')} · ${D.fm.fc[i] ? '🙂 ' + esc(D.fm.fid[i] || '') : 'yuz yo‘q'}</small></div><button class="sec sm" data-a="edit" data-i="${i}" title="Tahrirlash">✏</button><button class="sec sm xbtn" data-a="del" data-i="${i}" title="Ro‘yxatdan chiqarish">✕</button></div>`).join('') || '<p class="muted center">Hech narsa topilmadi</p>';
+  $('#mgMore').hidden = ids.length <= shown.length;
+}
+async function openEdit(i) {
+  if (modal) return;
+  const gs = [...new Set(D.g.filter(Boolean))], el = document.createElement('div'); el.className = 'att-modal';
+  el.innerHTML = `<div class="att-sheet"><h2>✏ Ma‘lumotlarni o‘zgartirish</h2><small class="muted">Tizimdagi №${i + 1}${D.fm.fid[i] ? ' · ' + esc(D.fm.fid[i]) : ''}</small>
+    <div class="att-form"><label>Familiya va ism</label><input id="edN" maxlength="60" value="${esc(D.n[i])}"><label>Guruh</label><input id="edG" maxlength="30" list="edGl" value="${esc(D.g[i] || '')}"><datalist id="edGl">${gs.map(g => `<option value="${esc(g)}">`).join('')}</datalist>
+      <label>Telefon raqam</label><input id="edP" type="tel" maxlength="24" value="${esc(D.fm.ph[i] || '')}"><label>Face ID</label><input id="edF" maxlength="16" value="${esc(D.fm.fid[i] || '')}" placeholder="Masalan: F0001">
+      <label>Face kod <small class="muted">(bo‘sh qoldirsangiz — yuz o‘chiriladi)</small></label><textarea id="edC" rows="4" spellcheck="false" disabled placeholder="Yuklanmoqda…"></textarea></div>
+    <p class="err" id="edE" hidden></p><div class="att-btns"><button class="primary" id="edGo" disabled>💾 Saqlash</button><button class="sec" id="edX">Bekor qilish</button></div></div>`;
+  document.body.appendChild(el); modal = el;
+  const q = s => el.querySelector(s), close = () => { el.remove(); modal = null; }; let orig = '';
+  q('#edX').onclick = close; modal.onEdited = close; modal.onErr = () => { const b = q('#edGo'); if (b) { b.disabled = false; b.textContent = '💾 Saqlash'; } };
+  try { const r = await fetch(`/api/rooms/${S.code}/att/faces?key=${encodeURIComponent(S.key)}`), j = await r.json(); orig = ((j.faces || [])[i] || []).join('|'); } catch { q('#edE').hidden = false; q('#edE').textContent = 'Face kodni yuklab bo‘lmadi — uni o‘zgartirib bo‘lmaydi'; }
+  if (!modal || modal !== el) return;
+  q('#edC').value = orig; q('#edC').disabled = false; q('#edC').placeholder = ''; q('#edGo').disabled = false;
+  q('#edGo').onclick = () => {
+    const n = q('#edN').value.replace(/\s+/g, ' ').trim(); if (n.split(' ').filter(w => w.length >= 2).length < 2) { q('#edE').hidden = false; q('#edE').textContent = 'Familiya va ismni to‘liq yozing'; return; }
+    const c = q('#edC').value.trim(), msg = { type: 'att-edit', sid: i, n, g: q('#edG').value.trim(), p: q('#edP').value.trim(), f: q('#edF').value.trim() };
+    if (c !== orig) msg.c = c;                              // Face kod faqat o'zgargan bo'lsa yuboriladi
+    q('#edE').hidden = true; q('#edGo').disabled = true; q('#edGo').textContent = 'Saqlanmoqda…'; send(msg);
+  };
+}
+
+// ---------------- 📈 Davomat tahlilchisi: faqat sanalar → tanlangan sanada kelganlar / kelmaganlar ----------------
+const thNames = ch => { const h = histNow(), k = h.dates.indexOf(D.thSel); const o = []; if (k >= 0) D.n.forEach((n, i) => { if (h.v[i][k] === ch) o.push(n); }); return o; };
+function paintTah() {
+  const box = $('#thDates'); if (!box || !P.root || P.root.dataset.p !== 'tah') return;
+  const h = histNow(), dates = h.dates, today = todayStr(), live = D.rows.size > 0;
+  $('#thInfo').textContent = dates.length ? `${dates.length} ta dars sanasi · ${D.n.length} ta o‘quvchi. Sanani bosing — o‘sha kuni kelgan va kelmaganlar ro‘yxati chiqadi.` : '';
+  if (!dates.length) { box.innerHTML = ''; $('#thDet').innerHTML = '<div class="th-empty"><b>📭 Hali sana yo‘q</b><span>Davomat tarixi bor Excel faylni «Ro‘yxat» bo‘limida yuklang yoki bugun davomat belgilang — sanalar shu yerda paydo bo‘ladi.</span></div>'; return; }
+  if (!dates.includes(D.thSel)) D.thSel = dates[dates.length - 1];
+  const stat = k => { let a = 0, b = 0; for (const v of h.v) { if (v[k] === '+') a++; else if (v[k] === '-') b++; } return { a, b, pct: a + b ? Math.round(a / (a + b) * 100) : 0 }; };
+  box.innerHTML = dates.map((d, k) => ({ d, k })).reverse().map(({ d, k }) => { const s = stat(k), [dd, mm, yy] = d.split('.');
+    return `<button class="th-d ${d === D.thSel ? 'on' : ''}" data-d="${d}"><span class="th-ring" style="--p:${s.pct}"><b>${s.pct}%</b></span><span class="th-dt"><b>${dd}.${mm}</b><small>${yy}${d === today && live ? ' · bugun' : ''}</small></span><span class="th-cn"><i class="in">✓ ${s.a}</i><i class="out">✕ ${s.b}</i></span></button>`; }).join('');
+  const k = dates.indexOf(D.thSel), s = stat(k), inn = thNames('+'), out = thNames('-'), none = D.n.length - inn.length - out.length;
+  const list = (arr, cls) => arr.length ? arr.map(n => { const i = D.n.indexOf(n); return `<li><i class="dot"></i><span>${esc(n)}</span><small>${esc(D.g[i] || '')}</small></li>`; }).join('') : `<li class="none">Hech kim yo‘q</li>`;
+  $('#thDet').innerHTML = `<div class="th-head"><div><h3>📅 ${esc(D.thSel)}</h3><small class="muted">${s.a + s.b} ta o‘quvchidan ${s.pct}% keldi${none ? ` · ${none} ta o‘quvchi o‘sha kuni ro‘yxatda bo‘lmagan` : ''}</small></div></div>
+    <div class="th-bar"><i style="width:${s.pct}%"></i></div>
+    <div class="th-cols"><div class="th-col in"><div class="th-ch"><b>✅ Kelganlar</b><em>${inn.length}</em><button class="sec sm" data-cp="in" title="Nusxalash">📋</button></div><ul>${list(inn)}</ul></div>
+      <div class="th-col out"><div class="th-ch"><b>❌ Kelmaganlar</b><em>${out.length}</em><button class="sec sm" data-cp="out" title="Nusxalash">📋</button></div><ul>${list(out)}</ul></div></div>`;
 }
 
 // ---------------- Server xabarlari ----------------
@@ -892,18 +1086,25 @@ const idx = () => { D.T = D.n.map(norm); };
 function on(m) {
   switch (m.type) {
     case 'att-list': D.title = m.title || ''; D.n = m.n || []; D.g = m.g || []; D.cfg = Object.assign(D.cfg, m.cfg); D.taken = new Set(m.taken || []); D.me = m.me; if (isHost() && D.svN == null) { D.svN = D.n.length; D.svF = D.cfg.faceN || 0; D.svM = 0; } D.rows = new Map(); D.st = null; idx(); paintHost(); paintRecv(); break;
+    case 'att-reset':                                      // Transmitter «Davomatni qaytadan boshlash»ni bosdi: hamma narsa tizimdan o'chdi
+      D.svN = 0; D.svF = 0; D.svM = 0; D.edited = false; D.tpl = null; D.me = null; D.meT = 0; D.filter = 'all'; D.q = ''; D.shown = 120; D.fm = { fid: [], fc: [], ph: [], pv: [], rg: [], dates: [] }; fSel = null; fLast = null; paintTpl();
+      if (isHost()) { const q = $('#atQ'); if (q) q.value = ''; const sl = $('#afSel'); if (sl) sl.textContent = 'Ism tanlanmagan'; showPane('list'); toast('🗑 Davomat qaytadan boshlandi — barcha o‘quvchilar tizimdan o‘chirildi', 5500); }
+      else toast('Davomat qaytadan boshlandi', 3500);
+      break;
     case 'att-full': D.rows = new Map(m.rows.map(r => [r[0], r])); D.st = m.st; D.c = m.c; paintHost(); break;
     case 'att-upd': m.rows.forEach(r => { if (r[1] === '') D.rows.delete(r[0]); else D.rows.set(r[0], r); }); D.st = m.st; D.c = m.c; paintHostSoon(); break;
     case 'att-taken': (m.add || []).forEach(i => D.taken.add(i)); (m.del || []).forEach(i => D.taken.delete(i)); if (!isHost() && R.box && !R.box.hidden && D.me == null) recvList(); break;
     case 'att-cfg': D.cfg = Object.assign(D.cfg, m.cfg); if (m.title != null) D.title = m.title; paintHost(); paintRecv(); break;
     case 'att-fmeta':
-      if (m.full) D.fm = { fid: m.fid || [], fc: m.fc || [], ph: m.ph || [], pv: m.pv || [], rg: m.rg || [] };
+      if (m.full) D.fm = { fid: m.fid || [], fc: m.fc || [], ph: m.ph || [], pv: m.pv || [], rg: m.rg || [], dates: m.dates || [] };
       else { (m.upd || []).forEach(([i, f, c]) => { D.fm.fid[i] = f; D.fm.fc[i] = c; }); }
       paintHostSoon(); break;
     case 'att-fcand': if (fWait && m.k === fWait.k) { const w = fWait; fWait = null; w.res(m); } break;
     case 'att-fok': toast(`✅ ${D.n[m.sid]} — Face ID: ${m.fid}`, 4500); fSel = null; fLast = null; { const e = $('#afSel'); if (e) e.textContent = 'Ism tanlanmagan'; const q = $('#afQ'); if (q) q.value = ''; const rs = $('#afRes'); if (rs) rs.innerHTML = ''; } faceBtn(); break;
     case 'att-fdup': if (fLast && confirm(`Bu yuz allaqachon «${m.name}» ga kiritilgan. Baribir «${D.n[m.sid]}» ga ham saqlansinmi?\n(Bir xil yuz ikki ism ostida bo‘lsa, tizim ikkalasini ham aniqlay olmaydi.)`)) send({ type: 'att-fenroll', sid: fLast.sid, d: fLast.d, force: true }); else toast('Bekor qilindi', 2500); break;
-    case 'att-ferr': toast(m.msg || 'Yuz saqlanmadi', 5000); break;
+    case 'att-ferr': toast(m.msg || 'Yuz saqlanmadi', 5000); if (modal && modal.onErr) modal.onErr(); break;
+    case 'att-edited': D.edited = true; if (modal && modal.onEdited) modal.onEdited(); toast(`✅ ${m.name} — ma‘lumotlari yangilandi`, 3500); break;
+    case 'att-deleted': D.edited = true; toast(`🗑 ${m.name} ro‘yxatdan chiqarildi`, 3500); break;
     case 'att-codeok': if (modal && modal.onCode) modal.onCode(true); break;
     case 'att-codeerr': if (modal && modal.onCode) modal.onCode(false, m); else toast(m.msg || 'Xatolik', 4500); break;
     case 'att-regok': if (modal && modal.onReg) modal.onReg(true, m); break;
@@ -921,6 +1122,6 @@ const joined = () => {
     return;
   }
   if (!isHost()) { send({ type: 'att-sync' }); setTimeout(() => { if (!D.n.length && S.joined) send({ type: 'att-sync' }); }, 2500); } };
-window.ATT = { on, joined, _t: { toStudents, D, getLoc, paintRecv, planFill, fillXlsx, fillDocx, fillCsvT, patchZip, findStudent, norm, idx: () => idx() } };
+window.ATT = { on, joined, _t: { toStudents, D, getLoc, paintRecv, planFill, fillXlsx, fillDocx, fillCsvT, patchZip, findStudent, norm, idx: () => idx(), fileBase, paintMng, paintTah, thNames, openEdit, rosterSheet, rosterCsvRows, rosterTitle, histNow, xlsxBlob, csvRows, normDate, templates } };
 buildHost(); buildRecv();
 })();

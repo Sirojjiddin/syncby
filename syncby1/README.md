@@ -458,3 +458,54 @@ Bitta xonada bir vaqtda faqat bitta mini-o'yin ketadi. Kechroq kirgan yoki qayta
 **Server:** yangi xabarlar `att-reg` (receiver), `att-add` (Transmitter); sozlama `selfReg`. Ro'yxat o'zgarishlari 400 ms da bir marta hammaga yuboriladi.
 
 **Eslatma:** o'zi ro'yxatdan o'tishda har kim istalgan ismni yoza oladi — shuning uchun «Ro'yxatdan o'tganlar» ro'yxatini tekshirib turing va ro'yxatdan o'tish tugagach `O'zi ro'yxatdan o'tish` ni o'chiring.
+
+## v24: 📋 Davomat — bitta standart format (sana ustunlari) va «Davomatni qaytadan boshlash»
+
+**Standart format (Excel / CSV, bitta):** sarlavha (`122-guruh ma’lumotlari`) · ko‘k «Davomat» bandi · `№ · F.I.Sh · Guruh · Telefon raqam · Face ID · Face kod` · **har dars uchun sana ustuni** (kelgan — havorang `+`, kelmagan — qizil `-`) · pastda `n ta keldi / m ta kelmadi` (Excelda jonli formula) · keyingi sana uchun bo‘sh `Sana` ustuni.
+
+- **Saqlash:** `💾 Fayl → Yagona fayl (Excel)` yoki `CSV`. Bugun kimdir belgilangan bo‘lsa, bugungi sana ustuni o‘ngga qo‘shiladi (kech kelgan ham `+`). Bugungi ustun faylda bor bo‘lsa — shu darsdagi belgilar bilan qayta yoziladi. Face ID o‘quvchining qatoriga `Face ID` ustuniga, yuz kodi `Face kod` ustuniga yoziladi.
+- **Yuklash:** shu faylni `👥 Ro‘yxat` bo‘limida yuklang — ismlar, Face ID, yuz kodlari va barcha sana ustunlari tiklanadi. Sarlavha qatori, «Davomat» bandi va yig‘indi qatori avtomatik o‘tkazib yuboriladi; Excel sana raqamlari ham tushuniladi. Eski format (bitta «Davomat» ustunida `03.11:+ 04.11:-`), eski shablon va sarlavhasiz ro‘yxat ham o‘qiladi.
+- **⬇ Excel / CSV shablon** — aynan shu formatdagi namuna.
+- **📄 O‘z shablon fayl bo‘yicha + / −** endi `Sana` ustunini ham to‘ldiradi (sarlavha bugungi sanaga almashadi).
+- **🗑 Davomatni qaytadan boshlash** (`👥 Ro‘yxat` bo‘limi, pastda): o‘quvchilar, Face ID kodlari, davomat tarixi, belgilar va ro‘yxatdan o‘tganlar tizimdan o‘chadi; hamma ulangan qurilmalarda ro‘yxat bo‘shaydi. Sozlamalar (radius, markaz, ochiq/yopiq…) qoladi. Tasdiqlash so‘raladi, saqlanmagan o‘zgarish bo‘lsa alohida ogohlantiradi. Faqat Transmitter bosa oladi. (Eski «Yangi davomat (tozalash)» — faqat belgilarni o‘chiradi, ro‘yxat qoladi.)
+- Server: `att-reset` xabari, yuklashda `dates` massivi (har o‘quvchi uchun `+ - .` qatori).
+
+## v25: o'quvchilarni tahrirlash/chiqarish, fayl nomi, 📈 Tahlil
+
+- **🧑‍🎓 O'quvchilar** (`👥 Ro'yxat` bo'limi): har bir o'quvchi yonida **✏** (F.I.Sh, guruh, telefon, Face ID, Face kodni o'zgartirish; Face kod bo'sh qolsa yuz o'chadi; Face ID band bo'lsa, yuz boshqa o'quvchiniki bo'lsa yoki kod buzilgan bo'lsa server rad etadi) va **✕** (ro'yxatdan chiqarish: ism, yuz, belgi va tarix o'chadi, qolganlarning raqamlari va belgilari to'g'ri siljiydi). Server: `att-edit`, `att-del`.
+- **Fayl nomi:** asosiy fayl doim `<guruh raqami>-guruh davomat` (`122-guruh davomat.xlsx` / `.csv`); bir nechta guruh bo'lsa `122_123-guruh davomat`.
+- **📈 Tahlil:** faqat dars sanalari kartochkalari (foiz halqasi, kelgan/kelmagan soni). Sanani bosing — shu kuni **kelganlar** va **kelmaganlar** ro'yxati (📋 — nusxalash). Sanalar yuklangan fayldan va bugungi belgilardan olinadi.
+
+## v25.1: fayl nomi ✏, sinxron 3-2-1, yangi taymer
+
+- **📄 Fayl nomi (Davomat → 💾 Fayl):** nom yonida ✏ tugmasi — bosib o'zgartiriladi (Enter — saqlash, Esc — bekor). Guruh raqami **doim Excel'dagi guruh ustunidan** olinadi: nom shablon (`{guruh}-guruh jurnal`) sifatida saqlanadi, shuning uchun boshqa guruh fayli yuklansa yoki o'quvchi guruhi ✏ bilan o'zgartirilsa, nomdagi raqam ham o'zgaradi. «↺ Avtomatik nomga qaytarish» bor. Excel ichidagi sarlavha (`122-guruh ma’lumotlari`) ham guruh ustuniga ergashadi.
+- **Viktorina 3-2-1 / audio:** raqamlar CSS animatsiya bilan serverdagi `startAt` dan chiziladi (asosiy oqim band bo'lsa ham qotmaydi), tik-tik ovozlari esa audio soatida shu vaqtga rejalanadi, audio to'xtab turgan bo'lsa ishga tushishi kutiladi. Endi 3-2-1 hamma savolda bir xil ovozli, boshida qisqa «Tayyor!» (avval «4» ko'rinib qolardi).
+- **Transmitter taymeri:** doira (halqa) ko'rinishida — silliq kamayadi, yashil → sariq → qizil, oxirgi 5 soniyada urib turadi.
+
+## v25.2: markazlar bir-biriga va oddiy foydalanuvchilarga halaqit bermaydi
+
+- **Brending faqat o'z qurilmasida:** markaz kodi kiritilsa, nom/logotip/rang faqat shu brauzerda saqlanadi (`localStorage`). Boshqa kirganlar kod kiritmasa — oddiy standart ko'rinish. (Bir xil brauzerda/kompyuterda ochilgan boshqa oynalar tanlovni baham ko'radi — «Chiqish» bilan tozalanadi.)
+- **Urinishlar chegarasi endi qurilma bo'yicha:** avval bitta IP dan 3 xato hammani (butun Wi-Fi) bloklardi. Endi blok `IP + qurilma` bo'yicha; qurilma identifikatorini almashtirib topishga urinishga qarshi IP bo'yicha yumshoq umumiy chegara bor (qurilma chegarasidan 10 barobar, kamida 30).
+- **Markaz xonalari ochiq ro'yxatda ko'rinmaydi:** to'g'ri kod kiritilganda server imzolangan token beradi; xona shu token bilan yaratilsa markazga tegishli bo'ladi va Receiverlarning umumiy xonalar ro'yxatiga chiqmaydi (kod/QR bilan kiriladi). Soxta token xonani markazga bog'lamaydi. Oddiy xonalar avvalgidek ro'yxatda.
+
+## v25.3: markaz kodi — Transmitter/Receiver tanlovi, markaz xonalari faqat kod kiritganlarga ko'rinadi
+
+- Markaz kodi to'g'ri kiritilganda xona **o'zi yaratilmaydi** va qurilma o'zi Transmitter bo'lib ketmaydi: bosh sahifada **Transmitter** va **Receiver** tugmalari ikkalasi ham ko'rinadi.
+- Ustoz **Transmitter** ni bossagina markaz xonasi ochiladi (nomi `CENTER_n_ROOM`dan; o'z ochiq xonasi bo'lsa shu davom ettiriladi).
+- **Receiver** xonalar ro'yxatida markaz xonasi faqat shu markaz kodini kiritgan qurilmalarga chiqadi (server imzolangan token bilan tekshiradi). Standart saytdan kirganlar markaz xonalarini ro'yxatda ko'rmaydi, lekin 6 xonali kodni yozib bemalol kira oladi.
+
+## v25.4: markaz kodi — sarlavhadagi logotip va nom
+
+- Markaz kodi bilan kirilganda sarlavhada **faqat markaz logosi** va **markaz nomi** turadi, yonida kichik «× Birlash» yozuvi (avval markaz logosi, Birlash logosi va nom birga chiqib, tiqilib qolardi).
+- Markaz logosi ustiga **sichqoncha olib kelinsa Birlash logosi** silliq almashib chiqadi, olib ketilsa markaz logosi qaytadi. Telefonda logoni bossangiz Birlash logosi 2,5 soniya ko'rinadi.
+- Markazning logosi berilmagan bo'lsa (yoki yuklanmasa), Birlash logosi doim ko'rinadi.
+
+## v25.5: Transmitterda receiverlar doim ko'rinadi
+
+- Xona kartasi ostida **👥 Receiverlar** paneli (barcha tablarda ko'rinadi, markaz rejimida ham): soni, tayyorlari, har bir receiverning ismi va ✕ (chiqarish). Avval ro'yxat faqat ☰ menyudagi yopiq bo'limda edi.
+- Server: Transmitter `members-sync` bilan ro'yxatni darhol so'raydi (xonaga kirganda va har 12 s da), ro'yxat 300 emas, `MAX_CLIENTS` gacha yuboriladi.
+
+## v25.6: kirgan receiverlar ro'yxatdan yo'qolmaydi
+
+- Telefon ekrani o'chsa yoki tarmoq uzilsa, receiver endi Transmitter ro'yxatidan **o'chib ketmaydi**: xira «oflayn» bo'lib turadi (panelda «2 onlayn / 3 kirgan»), qayta ulansa o'zi qaytadi. Oflaynlar 3 soatdan keyin yoki Transmitter ✕ bosganda tozalanadi. Receiver o'zi «Chiqish» bossa, darhol olib tashlanadi.
+- Yurak urishi (ping) endi bitta o'tkazib yuborilgan javobda ulanishni uzmaydi — ikkitadan keyin uzadi (Render/proksi va telefon uchun).
